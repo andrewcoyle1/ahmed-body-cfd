@@ -1,0 +1,52 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | cfMesh: A library for mesh generation           |
+|  \\    /   O peration     |                                                 |
+|   \\  /    A nd           |                                                 |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version   2.0;
+    format    ascii;
+    class     dictionary;
+    location  "system";
+    object    generateBoundaryLayersDict;
+}
+
+// Two-pass BL strategy: cartesianMesh builds the Cartesian background mesh,
+// then generateBoundaryLayers inserts prismatic layers in a separate step.
+// This avoids the 1200:1 aspect-ratio limit in cfMesh's in-mesh BL optimizer.
+
+boundaryLayers
+{
+    patchBoundaryLayers
+    {
+        "ahmed_body"
+        {
+            nLayers                  20;
+            thicknessRatio            1.2;
+            maxFirstLayerThickness    5e-6;
+            allowDiscontinuity        0;
+        }
+
+        "ground"
+        {
+            nLayers                  15;
+            thicknessRatio            1.2;
+            maxFirstLayerThickness    2e-5;
+            allowDiscontinuity        0;
+        }
+    }
+
+    optimiseLayer 1;
+
+    optimisationParameters
+    {
+        nSmoothNormals       3;
+        maxNumIterations     5;
+        featureSizeFactor    0.4;
+        reCalculateNormals   1;
+        relThicknessTol      0.1;
+    }
+}

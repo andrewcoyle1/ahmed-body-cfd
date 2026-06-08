@@ -1,0 +1,22 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+A multi-fidelity Bayesian optimisation framework has been developed and applied to Ahmed body aerodynamics. A 30-point RANS Latin Hypercube DoE seeds a co-Kriging surrogate, which is iteratively refined by 56 DES simulations directed by Expected Improvement acquisition. Key findings:
+
+\begin{itemize}
+    \item The multi-fidelity optimum is identified at slant $= 38.9^\circ$, diffuser $= 15.9^\circ$, ride height $= 48.9$~mm, nose radius $= 99.6$~mm, with predicted $C_d = 0.290\pm0.023$ and $C_l = -0.547\pm0.175$. The efficiency objective improves by 45\% relative to the $\theta_s = 25^\circ$ baseline ($f_1 = 0.108$ vs.\ $0.196$).
+
+    \item RANS systematically under-predicts drag with a mean correction $\overline{\delta C_d} = +0.017$ (std $= 0.023$), confirming that $k$-$\omega$~SST in steady-state mode is insufficient for reliable force coefficient prediction in massively separated Ahmed body flows. The lift correction is larger and more variable ($\overline{\delta C_l} = -0.027$, std $= 0.181$), making Cl-based design decisions unreliable without DES validation.
+
+    \item EI did not converge below the $5\times10^{-3}$ threshold after 56 total DES evaluations, oscillating at $\approx0.024$ throughout the global and local sampling phases. This is a structural feature of the design space (broad, flat optimum valley near $\theta_s \approx 38$--$40^\circ$), not a failure of the acquisition function.
+
+    \item Nose radius $R_\mathrm{nose}$ is confirmed as a low-sensitivity variable: its ARD kernel length scale is the largest of the four design dimensions, and the Pareto front is not significantly modified by $R_\mathrm{nose}$ variation across $50$--$150$~mm.
+
+    \item The MF Pareto front exhibits a bimodal structure: a low-slant branch ($\theta_s \approx 15$--$18^\circ$, $C_d \approx 0.22$--$0.23$, near-zero downforce) and a high-slant branch ($\theta_s \approx 34$--$40^\circ$, $C_d \approx 0.24$--$0.30$, $C_l \approx -0.19$ to $-0.55$). The near-critical angle regime ($18$--$33^\circ$) is Pareto-dominated in both metrics.
+
+    \item Autocorrelation analysis of the DES time series reveals $\approx13$ statistically independent observations per $0.32$~s averaging window ($\tau_{C_d} \approx 12$~ms), giving per-case 95\% CI of $\pm0.007$ on $\overline{C_d}$. Extending $t_\mathrm{end}$ to $1.0$~s would halve this interval and is the highest-leverage improvement to surrogate training data quality.
+
+    \item A verification DES run at the predicted optimum point ($\theta_s = 38.9^\circ$, $\theta_d = 15.9^\circ$, $h = 48.9$~mm) was not completed during the campaign, constituting a methodological gap. The nearest DES cases (des\_case\_041, des\_case\_044) are consistent with the surrogate prediction within $\sigma_{C_d} = 0.023$ but do not constitute an independent verification.
+\end{itemize}
+
+The co-Kriging surrogate framework is computationally efficient: the 30 RANS cases each ran in approximately 2 hours (60 CPU-hours total) and the 56 DES cases in approximately 2 hours each at 10 cores (1120 CPU-hours total), for a total campaign cost of $\approx1180$ CPU-hours. An equivalent full-DES DoE at 30 design points would require $600$ CPU-hours for 30\% less design-space coverage and no uncertainty quantification. The multi-fidelity approach delivers both broader coverage and richer surrogate uncertainty information at comparable cost.

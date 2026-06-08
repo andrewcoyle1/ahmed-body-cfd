@@ -1,0 +1,63 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Aerodynamic shape optimisation in motorsport requires navigating high-dimensional design spaces with expensive, high-fidelity simulations. Two competing concerns define the computational challenge: RANS closures are fast but systematically mis-predict separated flows, while scale-resolving methods (LES, DES) resolve those flows accurately but at orders-of-magnitude greater cost. Multi-fidelity surrogate modelling offers a principled path between them: a cheap low-fidelity model covers the design space densely, and expensive high-fidelity runs are used sparingly to correct the surrogate where fidelity matters most.
+
+This report applies that framework to the \emph{Ahmed body} \cite{ahmed1984}, a canonical bluff body used throughout experimental and computational aerodynamics as a benchmark for road-vehicle rear-end flows. The geometry captures the two dominant aerodynamic phenomena relevant to motorsport ground vehicles: slant-induced flow separation and underbody ground effect. Its parametric simplicity---four independent design variables govern the rear aerodynamic character---makes it tractable for a full multi-fidelity campaign within a constrained compute budget.
+
+\subsection{The Ahmed Body and Its Design Space}
+
+The Ahmed body (Figure~\ref{fig:geometry_pipeline}) is a bluff body of length $L = 1044$~mm, width $W = 389$~mm, and height $H = 288$~mm, supported on four cylindrical feet. The rear of the body terminates in a slanted surface whose angle $\theta_s$ governs the dominant flow regime. Below a critical angle of approximately $30^\circ$, two counter-rotating longitudinal vortices originate at the slant edges and maintain partially attached flow across the slant; above $30^\circ$ the vortex system breaks down and the slant flow fully separates, paradoxically \emph{reducing} drag relative to the near-critical configuration \cite{lienhart2002}. The critical-angle regime has been extensively validated in wind-tunnel experiments at $\mathrm{Re}\approx2\times10^6$ and provides a natural benchmark for turbulence models.
+
+Beyond the slant angle, three additional parameters are varied in this campaign. The underbody diffuser angle $\theta_d$ controls the rate of flow expansion beneath the rear of the body and directly sets the ground-effect downforce. The ride height $h$ sets the clearance between the body and the ground plane, governing the throat velocity and the magnitude of the suction pressure under the diffuser. The nose fillet radius $R_\mathrm{nose}$ modifies the front stagnation region and the leading-edge separation bubble; its aerodynamic impact is expected to be secondary but is included to prevent an artificially constrained design space.
+
+The four-dimensional parameter bounds are:
+
+\begin{table}[h]
+    \centering
+    \caption{Design variable bounds for the optimisation campaign.}
+    \label{tab:design_variables}
+    \begin{tabular}{lccl}
+        \toprule
+        Variable & Lower & Upper & Physical motivation \\
+        \midrule
+        Slant angle $\theta_s$ (deg) & 15 & 40 & Spans both sides of critical angle \\
+        Diffuser angle $\theta_d$ (deg) & 0 & 20 & From flat underbody to strong diffuser \\
+        Ride height $h$ (mm) & 30 & 80 & Ground clearance range \\
+        Nose radius $R_\mathrm{nose}$ (mm) & 50 & 150 & Leading-edge separation sensitivity \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Multi-Fidelity Co-Kriging}
+
+The Kennedy \& O'Hagan (2000) co-Kriging model \cite{kennedy2000} decomposes the high-fidelity response as:
+
+\begin{equation}
+    f_\mathrm{HF}(\mathbf{x}) = f_\mathrm{LF}(\mathbf{x}) + \delta(\mathbf{x})
+    \label{eq:cokriging}
+\end{equation}
+
+where $f_\mathrm{LF}$ is the RANS-trained Gaussian Process (GP) and $\delta(\mathbf{x})$ is an independent GP trained on the fidelity correction $f_\mathrm{HF} - f_\mathrm{LF}$ at the DES evaluation points. This additive formulation allows the correction GP to learn regions where RANS is systematically wrong, without requiring any modification to the underlying RANS or DES workflows. Both GPs use a Mat\'{e}rn-$5/2$ kernel with automatic relevance determination (ARD), enabling the surrogate to identify the relative sensitivity of each design dimension.
+
+\subsection{Bayesian Optimisation}
+
+Bayesian Optimisation (BO) uses the co-Kriging surrogate's predictive mean and uncertainty to select the next most informative evaluation point via the Expected Improvement (EI) acquisition function \cite{jones1998}:
+
+\begin{equation}
+    \mathrm{EI}(\mathbf{x}) = \mathbb{E}\!\left[\max(f^* - f_\mathrm{HF}(\mathbf{x}),\, 0)\right]
+    \label{eq:ei}
+\end{equation}
+
+where $f^*$ is the current best observed value of the aerodynamic efficiency objective. The EI quantifies the expected improvement over the current optimum, balancing exploration (high surrogate uncertainty) against exploitation (low surrogate mean). As the surrogate is refined with each DES evaluation, EI should decay monotonically; convergence is declared when EI falls below a threshold.
+
+\subsection{Objective Function}
+
+The aerodynamic efficiency objective combines drag and downforce:
+
+\begin{equation}
+    f_1(\mathbf{x}) = C_d(\mathbf{x}) - \lambda\,|C_l(\mathbf{x})|, \qquad \lambda = \tfrac{1}{3}
+    \label{eq:objective}
+\end{equation}
+
+where $\lambda = 1/3$ penalises drag three times more than it rewards downforce, reflecting a typical high-speed cornering compromise between drag on the straights and downforce through fast corners. Minimising $f_1$ favours configurations that generate meaningful downforce at a manageable drag cost.

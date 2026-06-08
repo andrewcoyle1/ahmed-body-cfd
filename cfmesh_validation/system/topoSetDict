@@ -1,0 +1,44 @@
+FoamFile
+{
+    version   2.0;
+    format    ascii;
+    class     dictionary;
+    location  "system";
+    object    topoSetDict;
+}
+
+// Selects faces from domainBoundary by centroid position for createPatch.
+// Tolerances of 0.01 m on each bound to catch any floating-point offsets.
+
+actions
+(
+    // ── inlet: x ≈ -5.22 ──────────────────────────────────────────────────
+    { name faceSet_inlet;  type faceSet; action new;
+      source boxToFace;
+      sourceInfo { box (-5.23 -1.96 -0.01) (-5.21  1.96  2.89); } }
+
+    // ── outlet: x ≈ 15.66 ─────────────────────────────────────────────────
+    { name faceSet_outlet; type faceSet; action new;
+      source boxToFace;
+      sourceInfo { box (15.65 -1.96 -0.01) (15.67  1.96  2.89); } }
+
+    // ── ground: z ≈ 0.00 ──────────────────────────────────────────────────
+    { name faceSet_ground; type faceSet; action new;
+      source boxToFace;
+      sourceInfo { box (-5.23 -1.96 -0.01) (15.67  1.96  0.01); } }
+
+    // ── top: z ≈ 2.88 ─────────────────────────────────────────────────────
+    { name faceSet_top;    type faceSet; action new;
+      source boxToFace;
+      sourceInfo { box (-5.23 -1.96  2.87) (15.67  1.96  2.89); } }
+
+    // ── side1: y ≈ -1.95 ──────────────────────────────────────────────────
+    { name faceSet_side1;  type faceSet; action new;
+      source boxToFace;
+      sourceInfo { box (-5.23 -1.96 -0.01) (15.67 -1.94  2.89); } }
+
+    // ── side2: y ≈ +1.95 ──────────────────────────────────────────────────
+    { name faceSet_side2;  type faceSet; action new;
+      source boxToFace;
+      sourceInfo { box (-5.23  1.94 -0.01) (15.67  1.96  2.89); } }
+);

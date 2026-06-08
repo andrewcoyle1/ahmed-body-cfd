@@ -1,0 +1,30 @@
+FoamFile { version 2.0; format ascii; class dictionary; object blockMeshDict; }
+scale 1;
+// Half domain: X -5.22→15.66, Y 0→1.95 (symmetry at y=0), Z 0→1.70
+// Background cell size ~163mm  (128×12×20 cells, fixed across all levels)
+vertices
+(
+    ( -5.22   0.00  0.00 )
+    ( 15.66   0.00  0.00 )
+    ( 15.66   1.95  0.00 )
+    ( -5.22   1.95  0.00 )
+    ( -5.22   0.00  1.70 )
+    ( 15.66   0.00  1.70 )
+    ( 15.66   1.95  1.70 )
+    ( -5.22   1.95  1.70 )
+);
+blocks
+(
+    hex (0 1 2 3 4 5 6 7)
+    (128 12 20)
+    simpleGrading (1 1 1)
+);
+boundary
+(
+    inlet      { type patch;    faces ((0 3 7 4)); }
+    outlet     { type patch;    faces ((1 2 6 5)); }
+    ground     { type wall;     faces ((0 1 2 3)); }
+    top        { type slip;     faces ((4 5 6 7)); }
+    side_y_neg { type symmetry; faces ((0 1 5 4)); }
+    side_y_pos { type slip;     faces ((3 2 6 7)); }
+);

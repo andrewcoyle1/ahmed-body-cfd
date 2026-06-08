@@ -1,0 +1,54 @@
+FoamFile
+{
+    version   2.0;
+    format    ascii;
+    class     dictionary;
+    location  "system";
+    object    createPatchDict;
+}
+
+// Splits the single domainBoundary patch (created by cfMesh from the combined
+// STL solid) into 6 named patches by face centroid position.
+// Domain bounds: x=[-5.22, 15.66], y=[-1.95, 1.95], z=[0.00, 2.88]
+
+pointSync false;
+
+patches
+(
+    {
+        name        inlet;
+        patchInfo   { type patch; }
+        constructFrom faceSet;
+        set         faceSet_inlet;
+    }
+    {
+        name        outlet;
+        patchInfo   { type patch; }
+        constructFrom faceSet;
+        set         faceSet_outlet;
+    }
+    {
+        name        ground;
+        patchInfo   { type wall; }
+        constructFrom faceSet;
+        set         faceSet_ground;
+    }
+    {
+        name        top;
+        patchInfo   { type patch; }
+        constructFrom faceSet;
+        set         faceSet_top;
+    }
+    {
+        name        side1;
+        patchInfo   { type patch; }
+        constructFrom faceSet;
+        set         faceSet_side1;
+    }
+    {
+        name        side2;
+        patchInfo   { type patch; }
+        constructFrom faceSet;
+        set         faceSet_side2;
+    }
+);

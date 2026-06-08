@@ -1,0 +1,99 @@
+\documentclass[a4paper,twoside,12pt]{article}
+
+%% Page layout
+\usepackage[margin=1in, headheight=16pt]{geometry}
+\setlength{\marginparwidth}{2cm}
+
+%% Metadata
+\title{Multi-Fidelity Bayesian Optimisation of Ahmed Body Aerodynamics}
+\author{Andrew Coyle}
+\newcommand{\keywords}{Ahmed body, multi-fidelity, co-Kriging, Bayesian optimisation, DES, RANS, OpenFOAM, expected improvement}
+
+%% Language and font
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{mathpazo}
+\usepackage{soul}
+
+%% Units
+\usepackage[squaren]{SIunits}
+
+%% Bibliography
+\usepackage[numbers]{natbib}
+
+%% Paragraphs and spacing
+\usepackage[parfill]{parskip}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{enumitem}
+
+%% Math
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+%% Quotes
+\usepackage[autostyle=true]{csquotes}
+
+%% Graphics and floats
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\captionsetup{font=small, labelfont=bf}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\providecommand{\mathdefault}[1]{#1}
+
+%% Tables
+\usepackage{tabularx,booktabs}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+\usepackage{tablefootnote}
+
+%% Links and metadata
+\usepackage[colorlinks=true, allcolors=black]{hyperref}
+\usepackage{hyperxmp}
+
+%% Section formatting
+\usepackage[compact]{titlesec}
+\definecolor{accent_colour}{RGB}{5, 105, 185}
+
+\usepackage{titling}
+    \pretitle{\begin{center}\Large\bfseries\color{accent_colour}}
+    \posttitle{\end{center}}
+    \preauthor{\begin{center}\normalsize}
+    \postauthor{\end{center}}
+    \predate{\begin{center}\small}
+    \postdate{\end{center}}
+\titleformat{\section}{\normalfont\large\bfseries\color{accent_colour}}{\thesection}{10pt}{\large}[\titlerule]
+\titlespacing*{\section}{0pt}{20pt}{20pt}
+\titleformat{\subsection}{\normalfont\bfseries}{\thesubsection}{10pt}{}
+\titlespacing*{\subsection}{0pt}{10pt}{10pt}
+
+%% Headers/footers
+\usepackage{fancyhdr}
+
+\makeatletter
+\hypersetup{
+    pdftitle={\@title},
+    pdfauthor={\@author},
+    pdfkeywords={\keywords},
+}
+\makeatother
+
+\begin{document}
+
+\maketitle
+
+\input{Abstract/Abstract.tex}
+\input{introduction/introduction.tex}
+\input{Methodology/Methodology.tex}
+\input{Results/Results.tex}
+\input{Discussion/Discussion.tex}
+\input{conclusion/conclusion.tex}
+
+\bibliographystyle{IEEEtran}
+\bibliography{bibs/references}
+
+\end{document}

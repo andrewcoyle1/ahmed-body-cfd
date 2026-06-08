@@ -1,0 +1,63 @@
+\section{Discussion and Limitations}
+\label{sec:discussion}
+
+\subsection{Statistical Uncertainty of DES Time-Averaging}
+\label{sec:des_statistics}
+
+A fundamental assumption in the pipeline is that each DES run produces a well-converged time-mean $\overline{C_d}$ that can be used as a training observation for the correction GP. This assumption is examined by computing the effective number of independent samples in the averaging window.
+
+Adjacent force coefficient samples at $\Delta t = 4\times10^{-4}$~s are strongly correlated: the integral time scale $\tau_{C_d}$ estimated from the autocorrelation function of the time series is $\approx12$~ms for $C_d$ and $\approx10$~ms for $C_l$. Over an averaging window of $T_\mathrm{avg} = 0.32$~s, this yields:
+
+\begin{equation}
+    N_\mathrm{eff} = \frac{T_\mathrm{avg}}{2\,\tau} \approx \frac{0.32}{0.024} \approx 13 \quad (C_d)
+    \label{eq:neff}
+\end{equation}
+
+independent observations, rather than the $813$ raw samples. The resulting 95\% confidence interval on the time-mean $\overline{C_d}$ per case is:
+
+\begin{equation}
+    \sigma_{\overline{C_d}} = \frac{1.96\,\sigma_{C_d}}{\sqrt{N_\mathrm{eff}}} \approx \frac{1.96\times0.013}{\sqrt{13}} \approx \pm0.007
+    \label{eq:cdci}
+\end{equation}
+
+For $C_l$ the situation is substantially worse: $\sigma_{\overline{C_l}} \approx \pm0.035$ per case, comparable to or larger than the inter-case $C_l$ differences the surrogate is attempting to learn.
+
+Three practical consequences follow. First, the minimum detectable $C_d$ difference between two cases at 95\% confidence is $2\times0.007 = 0.014$; the surrogate cannot reliably distinguish designs that differ by less than this. Second, surrogate-predicted $C_l$ differences below $\sim\!0.07$ should not be interpreted as significant. Third, the correction GP's WhiteKernel noise term, fitted during hyperparameter optimisation, should absorb the $\pm0.007$ per-case noise if the kernel is expressive enough---but this requires $N_\mathrm{eff}$ to be representative of the true noise distribution, which is not guaranteed when the DES cases are run at different parameter settings with different separated flow topologies.
+
+The recommended fix is to extend $t_\mathrm{end}$ from $0.45$~s to $1.0$~s for future campaigns. This quadruples the averaging window to $0.87$~s ($\approx33$ effective samples per case), halving $\sigma_{\overline{C_d}}$ to $\approx\pm0.004$ and making individual cases sufficient to detect differences of $\sim\!0.008$.
+
+\subsection{EI Non-Convergence and the Flat Optimum}
+\label{sec:flat_optimum}
+
+The EI plateau at $\approx0.024$ across 56 DES evaluations indicates a structural limitation of BO in this setting, not a failure of the acquisition function. The Expected Improvement for a Gaussian-distributed output scales as $\mathrm{EI} \propto \sigma(\mathbf{x}_*)$ near the optimum, where $\sigma$ is the surrogate predictive uncertainty. If the correction GP has a long length scale (broad uncertainty) and a shallow objective landscape, each new observation reduces $\sigma$ at the observed point but reveals a new region of comparable uncertainty nearby, maintaining a roughly constant EI.
+
+This is confirmed by inspecting the correction GP's fitted length scales in the slant direction: the IDDES correction has no sharp spatial feature that would allow the surrogate to confidently extrapolate a minimum. In physical terms, the high-slant regime ($\theta_s > 35^\circ$) produces a slowly varying attached-separation vortex topology where the aerodynamic response to geometry changes is broad and smooth rather than sharply peaked.
+
+From a practical standpoint, EI non-convergence is not fatal: the co-Kriging surrogate can still identify the global trend and a reliable approximate optimum region, even if the exact global minimum is poorly located. The MF Pareto front and optimum design (Table~\ref{tab:mf_optimum}) remain the best estimates available given the data.
+
+\subsection{Verification Gap at the MF Optimum}
+\label{sec:verification_gap}
+
+A methodological gap in the campaign is that the predicted MF optimum (Table~\ref{tab:mf_optimum}: $\theta_s = 38.9^\circ$, $\theta_d = 15.9^\circ$, $h = 48.9$~mm) was never directly verified with a DES simulation. The BO loop always evaluated EI-maximising candidates rather than the surrogate mean minimum; since EI balances exploration and exploitation, the two do not generally coincide. The nearest DES evaluations to the predicted optimum are des\_case\_041 ($\theta_s = 39.8^\circ$, $\theta_d = 18.1^\circ$, $h = 46.4$~mm, $C_d = 0.280$) and des\_case\_044 ($\theta_s = 38.6^\circ$, $\theta_d = 18.4^\circ$, $h = 45.1$~mm, $C_d = 0.291$), both within the surrogate's prediction uncertainty at the optimum ($\sigma_{C_d} = 0.023$). This is consistent with but does not validate the surrogate prediction.
+
+A single verification DES run at $\theta_s = 38.9^\circ$, $\theta_d = 15.9^\circ$, $h = 48.9$~mm should be included in any follow-on work to confirm the predicted $C_d = 0.290\pm0.023$ and $f_1 = 0.108$.
+
+\subsection{RANS Turbulence Model Limitations}
+\label{sec:rans_limits}
+
+The $k$-$\omega$~SST model used for the RANS DoE is known to under-predict mixing in separated shear layers, leading to the systematic positive $\delta C_d$ observed in Table~\ref{tab:des_corrections}. More critically, the RANS solution is steady-state: near the critical slant angle ($\theta_s \approx 28$--$32^\circ$), the actual flow is periodically switching between attached and separated states, and the steady RANS converges to an averaged intermediate state that does not correspond to either physical regime. This means RANS DoE data in the critical region is structurally mis-specified, not merely noisy, and the correction GP must learn a large, non-smooth correction in that zone.
+
+The consequence for surrogate quality is that the correction GP's ARD length scale in the slant direction is relatively short near the critical angle, increasing surrogate uncertainty and making the EI acquisition function favour exploration of the critical zone. This is appropriate behaviour from the BO perspective but means the campaign spends evaluations in a region where neither RANS nor short DES runs are reliable.
+
+\subsection{Simplified Geometry Relative to Full Race Car}
+\label{sec:ahmed_limits}
+
+The Ahmed body is a canonical benchmark, not a race car. Three simplifications introduce limitations when interpreting results in a motorsport context:
+
+\textbf{No moving ground plane.} The simulations use a stationary ground boundary condition, consistent with the Lienhart \& Becker \cite{lienhart2002} wind-tunnel setup. Real ground-effect flows require a moving ground (tangential velocity matching $U_\infty$), which strengthens the underbody venturi effect and changes the separation behaviour at the diffuser exit. The stationary ground underestimates diffuser efficiency.
+
+\textbf{No rotating wheels.} Wheel rotation generates significant additional drag and modifies the ground plane boundary layer upstream of the diffuser. The cylindrical leg geometry used here is a simplified support structure, not a rotating tyre.
+
+\textbf{No cooling flows.} Real ground vehicles pass significant mass flow through radiators, which exits through body outlets and interacts with the underbody and rear wake. The Ahmed body is solid.
+
+These simplifications mean that the absolute coefficient values ($C_d \approx 0.27$--$0.29$ at the optimum) are not directly transferable to a race car. The optimisation trends and the MF framework itself generalise fully to more complex geometries.

@@ -1,0 +1,164 @@
+\section{Methodology}
+\label{sec:methodology}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    >=latex,
+    every node/.style={font=\small},
+    box/.style={draw=gray!55, rounded corners=3pt, fill=gray!8,
+                minimum width=2.0cm, minimum height=0.65cm,
+                align=center, inner sep=4pt},
+    hibox/.style={draw=accent_colour!70, rounded corners=3pt, fill=accent_colour!10,
+                minimum width=2.0cm, minimum height=0.65cm,
+                align=center, inner sep=4pt},
+    arr/.style={->, thick, gray!55!black},
+    lbl/.style={font=\footnotesize, gray!55!black},
+]
+\node[box]   (doe)   at (0,   0) {RANS DoE\\(30 LHS pts)};
+\node[box]   (des0)  at (3.0, 0) {DES anchors\\(10 pts)};
+\node[hibox] (cok)   at (6.0, 0) {co-Kriging\\surrogate};
+\node[box]   (ei)    at (9.0, 0) {EI\\acquisition};
+\node[hibox] (opt)   at (9.0,-1.5) {MF optimum};
+\node[box]   (local) at (6.0,-1.5) {local LHS\\(12 pts)};
+
+\draw[arr] (doe)  -- (des0);
+\draw[arr] (des0) -- (cok);
+\draw[arr] (cok)  -- (ei);
+\draw[arr] (ei)   -- (cok) node[midway, right, font=\footnotesize, gray!60] {44 BO pts};
+\draw[arr] (ei)   -- (opt);
+\draw[arr] (opt)  -- (local);
+\draw[arr] (local) -- (cok);
+\end{tikzpicture}
+\caption{Analysis pipeline. A 30-point RANS Latin Hypercube DoE seeds the co-Kriging surrogate via 10 DES anchor cases. Bayesian optimisation adds 44 DES cases directed by Expected Improvement. A final 12-point local LHS refines the identified optimum region.}
+\label{fig:geometry_pipeline}
+\end{figure}
+
+\subsection{Geometry Generation}
+\label{sec:geometry}
+
+Ahmed body geometries are generated programmatically using a headless FreeCAD script (\texttt{generate\_ahmed\_freecad.py}) that reads design parameters from environment variables and writes a watertight STL surface. The body dimensions follow the Lienhart \& Becker \cite{lienhart2002} reference geometry: $L=1044$~mm, $W=389$~mm, $H=288$~mm on four cylindrical legs of radius $R_\mathrm{leg}=15$~mm. The slant begins at $x=822$~mm from the nose. The nose fillet radius $R_\mathrm{nose}$ is applied to both the top and bottom leading edges; it is clamped to $H/2 - 5$~mm to prevent upper and lower arcs from intersecting. Ground clearance is set to the nominal Lienhart value of $h_0 = 50.8$~mm for all RANS cases; ride height becomes a design variable in the DES campaign by shifting the STL vertically relative to the ground plane.
+
+\subsection{Mesh Generation}
+\label{sec:mesh}
+
+The computational domain extends $5L$ upstream, $10L$ downstream, $3H$ above, and $\pm 3W/2$ laterally from the body, following established best-practice guidelines for bluff-body simulations \cite{franke2007}. Meshing uses OpenFOAM's blockMesh to create a structured background grid, followed by snappyHexMesh for surface refinement. Six refinement regions are defined:
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Body surface:} 4 levels of refinement (cell size $\approx 1.3$~mm)
+    \item \textbf{Near-body region:} 4 levels out to $\sim 50$~mm from the surface
+    \item \textbf{Slant wake:} 5 levels — captures the separated shear layer and reattachment
+    \item \textbf{Rear foot region:} 6 levels — highly localised refinement at the leg-ground junction
+    \item \textbf{Front foot region:} 6 levels — leading-edge horseshoe vortex
+    \item \textbf{Far wake:} 3 levels — coarsens to background resolution at $3L$ downstream
+\end{itemize}
+
+A prism layer mesh is added at all wall boundaries with expansion ratio $1.2$ to resolve the turbulent boundary layer. Target $y^+\approx1$ for DES cases and $y^+\approx30$--$50$ for RANS wall functions. Maximum cell count is capped at $6\times10^6$ (snappyHexMesh \texttt{maxGlobalCells}) to maintain a consistent computational budget across cases.
+
+\subsection{RANS Design-of-Experiments}
+\label{sec:rans_doe}
+
+A 30-point Latin Hypercube Sample (LHS) over the four-dimensional design space (Table~\ref{tab:design_variables}) provides the low-fidelity training data. The LHS is generated using \texttt{scipy.stats.qmc.LatinHypercube} to ensure maximin separation. Each case uses steady-state simpleFoam with the $k$-$\omega$~SST turbulence model \cite{menter1994} at $Re = U_\infty L/\nu = 2.78\times10^6$ ($U_\infty = 40.0$~m/s, $\nu = 1.5\times10^{-5}$~m$^2$/s). Force coefficients use reference area $A_\mathrm{ref} = 0.056$~m$^2$ and reference length $L_\mathrm{ref} = 1.044$~m. The RANS GP is trained on converged $C_d$ and $C_l$ values from all 30 cases, with a Mat\'{e}rn-$5/2$ kernel and a WhiteKernel noise term to absorb case-to-case residual variance.
+
+\subsection{DES Setup}
+\label{sec:des_setup}
+
+High-fidelity simulations use pimpleFoam (transient PISO-SIMPLE hybrid) with the $k$-$\omega$~SST-DES turbulence model in its IDDES (Improved Delayed Detached Eddy Simulation) formulation \cite{shur2008}. The IDDESDelta length scale switches the model between RANS near walls and LES in the separated wake, consistent with the validation study of Lienhart \& Becker \cite{lienhart2002}. Key DES parameters are given in Table~\ref{tab:des_params}.
+
+\begin{table}[h]
+    \centering
+    \caption{DES simulation parameters.}
+    \label{tab:des_params}
+    \begin{tabular}{ll}
+        \toprule
+        Parameter & Value \\
+        \midrule
+        Solver & pimpleFoam (OpenFOAM v2312) \\
+        Turbulence model & $k$-$\omega$~SST-DES (IDDES) \\
+        Freestream velocity $U_\infty$ & 40.0~m/s \\
+        Reynolds number & $2.78\times10^6$ \\
+        Time step $\Delta t$ & $1\times10^{-4}$~s \\
+        End time $t_\mathrm{end}$ & $0.45$~s \\
+        Averaging start $t_\mathrm{avg}$ & $0.13$~s \\
+        MPI processes & 10 \\
+        Reference area $A_\mathrm{ref}$ & $0.056$~m$^2$ \\
+        Reference length $L_\mathrm{ref}$ & $1.044$~m \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The transient phase ($t < 0.13$~s) allows approximately 5 flow-through times ($T_\mathrm{conv} = L/U_\infty = 0.026$~s) for the initial condition to wash through the domain before averaging begins. Force coefficients are extracted from the \texttt{postProcessing/forceCoeffs} directory using an averaging window of $T_\mathrm{avg} = 0.32$~s.
+
+\subsection{Co-Kriging Surrogate}
+\label{sec:cokriging}
+
+The co-Kriging surrogate follows the Kennedy \& O'Hagan additive decomposition (Eq.~\ref{eq:cokriging}). Separate GPs are trained for $C_d$ and $C_l$, each with a Mat\'{e}rn-$5/2$ ARD kernel and a WhiteKernel noise term. Inputs are standardised to zero mean and unit variance before fitting. The correction GP $\delta(\mathbf{x})$ is trained on the $n_\mathrm{HF}$ DES evaluation points; both GPs use \texttt{sklearn.gaussian\_process.GaussianProcessRegressor} with 10 restarts per fit to avoid local optima in hyperparameter space.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    >=latex,
+    every node/.style={font=\small},
+    box/.style={draw=gray!55, rounded corners=3pt, fill=gray!8,
+                minimum width=3.0cm, minimum height=0.65cm,
+                align=center, inner sep=4pt},
+    hibox/.style={draw=accent_colour!70, rounded corners=3pt, fill=accent_colour!10,
+                minimum width=3.0cm, minimum height=0.65cm,
+                align=center, inner sep=4pt},
+    arr/.style={->, thick, gray!55!black},
+]
+\node[box]   (rans)  at (0,  1.2) {RANS GP $\hat{f}_\mathrm{LF}(\mathbf{x})$};
+\node[box]   (corr)  at (0, -0.2) {Correction GP $\hat{\delta}(\mathbf{x})$};
+\node[hibox] (mf)    at (5,  0.5) {MF prediction\\$\hat{f}_\mathrm{HF} = \hat{f}_\mathrm{LF} + \hat{\delta}$};
+\node[box]   (train) at (0, -1.4) {30 RANS pts};
+\node[box]   (despt) at (0, -2.5) {$n_\mathrm{HF}$ DES pts};
+
+\draw[arr] (rans) -- (mf);
+\draw[arr] (corr) -- (mf);
+\draw[arr] (train) -- (rans) node[midway, right, font=\footnotesize, gray!60] {train};
+\draw[arr] (despt) -- (corr) node[midway, right, font=\footnotesize, gray!60] {train};
+\end{tikzpicture}
+\caption{Co-Kriging surrogate architecture. The RANS GP is fixed after the initial DoE; only the correction GP is updated as DES evaluations are added. The MF prediction at any point is the sum of the two GP means, with uncertainty propagated in quadrature.}
+\label{fig:cokriging_arch}
+\end{figure}
+
+\subsection{Bayesian Optimisation Loop}
+\label{sec:bo_loop}
+
+The BO campaign runs as an automated pipeline (\texttt{run\_bo\_loop.py}) that:
+
+\begin{enumerate}[noitemsep]
+    \item Reads the current EI-maximising candidate from \texttt{results/mf\_next\_candidate.json}
+    \item Generates the corresponding Ahmed body STL and OpenFOAM case
+    \item Executes pimpleFoam in a Docker container (10 MPI cores)
+    \item Extracts time-averaged force coefficients
+    \item Gets the RANS GP prediction at the same point
+    \item Appends the DES result and RANS correction to \texttt{des\_output/des\_results.csv}
+    \item Re-fits the co-Kriging surrogate (\texttt{co\_kriging.py})
+    \item Returns to step 1 with the updated EI candidate
+\end{enumerate}
+
+A PID-based lockfile (\texttt{pipeline\_lock.py}) prevents concurrent pipeline instances, which became necessary after a double-launch incident at iteration 6 that ran two DES cases simultaneously and degraded per-case throughput. The loop terminates when EI falls below a threshold (default $5\times10^{-3}$) or a maximum iteration count is reached (default 10 per invocation).
+
+\subsection{Local Sampling}
+\label{sec:local_sampling}
+
+After 44 BO-directed DES cases, EI had not converged below the threshold (see \S\ref{sec:ei_convergence}). A secondary sampling strategy placed a 12-point LHS in a tight box around the region consistently identified by the surrogate as near-optimal:
+
+\begin{table}[h]
+    \centering
+    \caption{Local sampling bounds (tight box around MF optimum).}
+    \label{tab:local_bounds}
+    \begin{tabular}{lcc}
+        \toprule
+        Variable & Lower & Upper \\
+        \midrule
+        Slant angle (deg) & 37.5 & 40.5 \\
+        Diffuser angle (deg) & 16.5 & 19.5 \\
+        Ride height (mm) & 43.0 & 49.0 \\
+        Nose radius (mm) & \multicolumn{2}{c}{100.0 (fixed)} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The front radius was fixed at 100~mm, consistent with the identified low sensitivity of that variable in the surrogate. Each local case re-fits the co-Kriging surrogate after completion so EI is tracked throughout the sweep.
