@@ -1,0 +1,5 @@
+# OpenFOAM dictionaries and mesh files carry a "C++ -*-" banner but are not
+# C++ source — mark them so GitHub linguist ignores them for language stats.
+cfmesh_validation/system/* linguist-detectable=false
+mesh_convergence/**/system/* linguist-detectable=false
+mesh_convergence/**/constant/triSurface/*.eMesh linguist-detectable=false
