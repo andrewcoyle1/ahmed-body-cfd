@@ -33,7 +33,7 @@ FREECAD=/Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd
 RAW_STL=$CASE_DIR/constant/triSurface/ahmed_body_raw.stl
 mkdir -p "$CASE_DIR/constant/triSurface"
 
-echo "=== [1/4] Generating Ahmed body STL ==="
+echo "=== [1/6] Generating Ahmed body STL ==="
 echo "    slant=25°  diffuser=0°  ride_height=50.8mm  nose_radius=100mm"
 AHMED_SLANT_ANGLE=25.0  \
 AHMED_DIFFUSER_ANGLE=0.0 \
@@ -51,17 +51,17 @@ echo "    OK: $(wc -c < "$RAW_STL") bytes"
 DOMAIN_STL=$CASE_DIR/constant/triSurface/ahmed_domain.stl
 
 echo ""
-echo "=== [2/4] Building combined domain+body STL ==="
+echo "=== [2/6] Building combined domain+body STL ==="
 python3 "$PROJECT_DIR/generate_domain_stl.py" "$RAW_STL" "$DOMAIN_STL"
 
 # ── Step 3: cartesianMesh (Cartesian background, no BL) ───────────────────────
 echo ""
-echo "=== [3/5] Running cartesianMesh (background mesh, BL omitted) ==="
+echo "=== [3/6] Running cartesianMesh (background mesh, BL omitted) ==="
 time "$USER_BIN/cartesianMesh" -case "$CASE_DIR" 2>&1 | tee "$CASE_DIR/log.cartesianMesh"
 
 # ── Step 4: generateBoundaryLayers ────────────────────────────────────────────
 echo ""
-echo "=== [4/5] Running generateBoundaryLayers ==="
+echo "=== [4/6] Running generateBoundaryLayers ==="
 time "$USER_BIN/generateBoundaryLayers" -case "$CASE_DIR" 2>&1 | tee "$CASE_DIR/log.generateBoundaryLayers"
 
 # ── Step 5: renumberMesh (fix face ordering + Cuthill-McKee bandwidth reduction)
