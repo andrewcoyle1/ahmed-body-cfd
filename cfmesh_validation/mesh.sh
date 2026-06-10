@@ -18,14 +18,20 @@ CASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$CASE_DIR")"
 
 # ── Native OpenFOAM v2512 + cfMesh environment ────────────────────────────────
-ESI=/Volumes/OpenFOAM-ESI/OpenFOAM-v2512
+set +eu
+source /Volumes/OpenFOAM-v2512/etc/bashrc \
+    WM_COMPILER=Clang WM_MPLIB=SYSTEMOPENMPI FOAM_INST_DIR=/Volumes 2>/dev/null
+set -eu
+export PATH="$HOME/OpenFOAM/andrewcoyle-v2512/platforms/darwin64ClangDPInt32Opt/bin:$PATH"
+export DYLD_LIBRARY_PATH="$HOME/OpenFOAM/andrewcoyle-v2512/platforms/darwin64ClangDPInt32Opt/lib:/Volumes/OpenFOAM-v2512/platforms/darwin64ClangDPInt32Opt/lib:/Volumes/OpenFOAM-v2512/env/lib:${DYLD_LIBRARY_PATH:-}"
+
+ESI=/Volumes/OpenFOAM-v2512
 ESI_LIB=$ESI/platforms/darwin64ClangDPInt32Opt/lib
 ESI_BIN=$ESI/platforms/darwin64ClangDPInt32Opt/bin
-USER_LIB=$HOME/openfoam/andrewcoyle-v2512/platforms/darwin64ClangDPInt32Opt/lib
-USER_BIN=$HOME/openfoam/andrewcoyle-v2512/platforms/darwin64ClangDPInt32Opt/bin
+USER_LIB=$HOME/OpenFOAM/andrewcoyle-v2512/platforms/darwin64ClangDPInt32Opt/lib
+USER_BIN=$HOME/OpenFOAM/andrewcoyle-v2512/platforms/darwin64ClangDPInt32Opt/bin
 
-export WM_PROJECT_DIR=$ESI
-export DYLD_LIBRARY_PATH="$USER_LIB:$ESI_LIB"
+export DYLD_LIBRARY_PATH="$USER_LIB:$ESI_LIB:${DYLD_LIBRARY_PATH:-}"
 
 FREECAD=/Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd
 
