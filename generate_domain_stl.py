@@ -5,7 +5,15 @@ Combines an Ahmed body STL (FreeCAD binary or ASCII output) with a
 six-face ASCII domain bounding box into a single ASCII STL file suitable
 for cfMesh's cartesianMesh utility.
 
-Body triangles are written as a single patch named "ahmed_body".
+Body triangles are split into two patches:
+  ahmed_body      — all body surfaces except leg bases
+  ahmed_legs_base — triangles whose centroid z < ride_height * 0.1
+                    (the flat leg bottom faces that sit at ground level).
+                    Excluded from BL insertion to prevent inverted cells
+                    at the leg-ground junction.
+
+The threshold scales with ride_height (read from AHMED_h env var, mm)
+so it remains valid across the full DoE parameter space.
 
 Domain boundary patches:
   inlet       — x = -5.22 m (upstream inflow)
@@ -25,6 +33,7 @@ Domain bounds match the validated wind-tunnel analogue:
   upstream 5L, downstream 14L, lateral ±6W, top 9H — blockage ≈ 1%.
 """
 
+import os
 import struct
 import sys
 from pathlib import Path
@@ -99,6 +108,27 @@ def write_ascii_stl(f, name: str, triangles: list[tuple]):
     f.write(f"endsolid {name}\n")
 
 
+# ── Body patch classification ─────────────────────────────────────────────────
+
+def classify_body_triangles(tris: list[tuple], ride_height_m: float) -> dict[str, list[tuple]]:
+    """Split body triangles into ahmed_body and ahmed_legs_base.
+
+    Triangles whose centroid z < ride_height * 0.1 are leg base faces —
+    they sit flush at ground level and must not receive BL extrusion.
+    The threshold scales with ride_height so it holds across the DoE range.
+    """
+    threshold = ride_height_m * 0.1
+    body, legs_base = [], []
+    for tri in tris:
+        _, v1, v2, v3 = tri
+        centroid_z = (v1[2] + v2[2] + v3[2]) / 3.0
+        if centroid_z < threshold:
+            legs_base.append(tri)
+        else:
+            body.append(tri)
+    return {"ahmed_body": body, "ahmed_legs_base": legs_base}
+
+
 # ── Domain box face geometry ──────────────────────────────────────────────────
 # Each rectangular face → 2 triangles.
 # Vertices are ordered so the cross product of (v2-v1) × (v3-v1) gives the
@@ -159,22 +189,32 @@ def main():
     body_path = Path(sys.argv[1])
     out_path  = Path(sys.argv[2])
 
+    ride_height_mm = float(os.environ.get("AHMED_h", "50.8"))
+    ride_height_m  = ride_height_mm / 1000.0
+    leg_threshold  = ride_height_m * 0.1
+    print(f"  ride_height={ride_height_mm} mm  →  leg-base threshold z < {leg_threshold*1000:.2f} mm")
+
     print(f"Reading body STL: {body_path}")
     body_tris = read_stl(body_path)
     print(f"  {len(body_tris)} triangles")
+
+    patches = classify_body_triangles(body_tris, ride_height_m)
+    for name, tris in patches.items():
+        print(f"  {name}: {len(tris)} triangles")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     domain = domain_faces()
     print(f"Writing combined STL: {out_path}")
     with open(out_path, "w") as f:
-        write_ascii_stl(f, "ahmed_body", body_tris)
+        for patch_name, tris in patches.items():
+            if tris:
+                write_ascii_stl(f, patch_name, tris)
         for patch_name, tris in domain.items():
             write_ascii_stl(f, patch_name, tris)
 
     total = len(body_tris) + sum(len(t) for t in domain.values())
     print(f"  {total} triangles total")
-    print(f"  Body patch: ahmed_body ({len(body_tris)} triangles)")
     print(f"  Domain patches: {', '.join(domain.keys())}")
     print(f"  Domain: x=[{XMIN}, {XMAX}]  y=[{YMIN}, {YMAX}]  z=[{ZMIN}, {ZMAX}]")
 

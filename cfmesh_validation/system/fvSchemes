@@ -1,14 +1,16 @@
-FoamFile
+FoamFile { version 2.0; format ascii; class dictionary; object fvSchemes; }
+ddtSchemes      { default steadyState; }
+gradSchemes     { default cellLimited leastSquares 1; grad(p) cellLimited leastSquares 0.5; }
+divSchemes
 {
-    version   2.0;
-    format    ascii;
-    class     dictionary;
-    location  "system";
-    object    fvSchemes;
+    default         none;
+    div(phi,U)      bounded Gauss linearUpwind grad(U);
+    div(phi,k)      bounded Gauss upwind;
+    div(phi,omega)  bounded Gauss upwind;
+    div(div(phi,U)) Gauss linear;
+    div((nuEff*dev2(T(grad(U))))) Gauss linear;
 }
-ddtSchemes      { default none; }
-gradSchemes     { default none; }
-divSchemes      { default none; }
-laplacianSchemes { default none; }
+laplacianSchemes { default Gauss linear limited 1; }
 interpolationSchemes { default linear; }
-snGradSchemes   { default none; }
+snGradSchemes   { default limited 1; }
+wallDist        { method meshWave; }

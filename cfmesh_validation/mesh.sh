@@ -60,6 +60,13 @@ echo ""
 echo "=== [2/6] Building combined domain+body STL ==="
 python3 "$PROJECT_DIR/generate_domain_stl.py" "$RAW_STL" "$DOMAIN_STL"
 
+# ── Clean stale fields from previous runs ─────────────────────────────────────
+rm -f "$CASE_DIR"/0/C "$CASE_DIR"/0/Cx "$CASE_DIR"/0/Cy "$CASE_DIR"/0/Cz
+rm -f "$CASE_DIR"/0/skewness "$CASE_DIR"/0/nonOrthoAngle "$CASE_DIR"/0/minPyrVolume
+rm -f "$CASE_DIR"/0/aspectRatio "$CASE_DIR"/0/cellDeterminant "$CASE_DIR"/0/wallDistance
+rm -f "$CASE_DIR"/constant/skewness "$CASE_DIR"/constant/nonOrthoAngle
+rm -f "$CASE_DIR"/constant/minPyrVolume "$CASE_DIR"/constant/aspectRatio
+
 # ── Step 3: cartesianMesh (Cartesian background, no BL) ───────────────────────
 echo ""
 echo "=== [3/6] Running cartesianMesh (background mesh, BL omitted) ==="
