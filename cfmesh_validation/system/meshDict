@@ -77,22 +77,40 @@ objectRefinements
 }
 
 // ─── Surface patch refinement ─────────────────────────────────────────────────
-// Finer resolution where physics are most sensitive; coarser where they aren't.
-// ahmed_diffuser entry is present for non-zero diffuser angles; cfMesh ignores
-// it silently when the patch is absent from the STL (diffuser_angle = 0°).
 localRefinement
 {
-    "ahmed_slant"     { cellSize 0.004; }
-    "ahmed_diffuser"  { cellSize 0.004; }
-    "ahmed_body"      { cellSize 0.006; }
-    "ahmed_underbody" { cellSize 0.010; }
+    "ahmed_body" { cellSize 0.004; refinementThickness 0.008; }
 }
 
 // ─── Boundary layers ──────────────────────────────────────────────────────────
-// BL insertion is intentionally omitted here.
-// The 5e-6 m first layer / 6mm volume cell = 1200:1 aspect ratio exceeds
-// cfMesh's in-mesh BL optimizer limit. Use generateBoundaryLayers as a
-// separate pass after cartesianMesh completes (see generateBoundaryLayersDict).
+// Wall-function BL: y+ target ~50-100 at Ahmed body conditions (~30 m/s).
+// First layer 1 mm, 5 layers at 1.2x ratio → 7.4 mm total stack, last layer
+// ~2 mm transitions cleanly into the 4 mm background cells.
+boundaryLayers
+{
+    patchBoundaryLayers
+    {
+        "ahmed_body"
+        {
+            nLayers                  3;
+            thicknessRatio            1.2;
+            maxFirstLayerThickness    5e-4;
+            allowDiscontinuity        1;
+        }
+
+    }
+
+    optimiseLayer 1;
+
+    optimisationParameters
+    {
+        nSmoothNormals       5;
+        maxNumIterations     5;
+        featureSizeFactor    0.2;
+        reCalculateNormals   1;
+        relThicknessTol      0.1;
+    }
+}
 
 // ─── Mesh quality targets ─────────────────────────────────────────────────────
 // maxNonOrthogonality 65 → nNonOrthogonalCorrectors can be reduced from 3 to 1
@@ -116,27 +134,9 @@ renameBoundary
 
     newPatchNames
     {
-        "ahmed_slant"
-        {
-            newName   ahmed_slant;
-            type      wall;
-        }
-
-        "ahmed_diffuser"
-        {
-            newName   ahmed_diffuser;
-            type      wall;
-        }
-
         "ahmed_body"
         {
             newName   ahmed_body;
-            type      wall;
-        }
-
-        "ahmed_underbody"
-        {
-            newName   ahmed_underbody;
             type      wall;
         }
 

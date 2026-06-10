@@ -5,13 +5,7 @@ Combines an Ahmed body STL (FreeCAD binary or ASCII output) with a
 six-face ASCII domain bounding box into a single ASCII STL file suitable
 for cfMesh's cartesianMesh utility.
 
-Body triangles are classified into aerodynamically distinct named patches
-by face-normal direction:
-  ahmed_slant     — rear slanted surface (nx>0.15 AND nz>0.15)
-  ahmed_diffuser  — underbody diffuser ramp (nx>0.05 AND nz<-0.05);
-                    absent for diffuser_angle=0° (flat underbody has nx≡0)
-  ahmed_underbody — flat floor (nz<-0.85)
-  ahmed_body      — front face, sides, top, rear base, nose fillet, legs
+Body triangles are written as a single patch named "ahmed_body".
 
 Domain boundary patches:
   inlet       — x = -5.22 m (upstream inflow)
@@ -105,35 +99,6 @@ def write_ascii_stl(f, name: str, triangles: list[tuple]):
     f.write(f"endsolid {name}\n")
 
 
-# ── Body patch classification ─────────────────────────────────────────────────
-
-def classify_body_triangles(tris: list[tuple]) -> dict[str, list[tuple]]:
-    """Split body triangles into aerodynamic patches by outward face normal.
-
-    Rules are ordered; first match wins.  Degenerate (zero-length) normals
-    fall through to ahmed_body.  Patches with zero triangles are returned as
-    empty lists — callers should skip writing them so cfMesh never sees an
-    empty solid block.
-    """
-    patches: dict[str, list[tuple]] = {
-        "ahmed_slant":     [],
-        "ahmed_diffuser":  [],
-        "ahmed_underbody": [],
-        "ahmed_body":      [],
-    }
-    for tri in tris:
-        nx, ny, nz = tri[0]
-        if nx > 0.15 and nz > 0.15:
-            patches["ahmed_slant"].append(tri)
-        elif nx > 0.05 and nz < -0.05:
-            patches["ahmed_diffuser"].append(tri)
-        elif nz < -0.85:
-            patches["ahmed_underbody"].append(tri)
-        else:
-            patches["ahmed_body"].append(tri)
-    return patches
-
-
 # ── Domain box face geometry ──────────────────────────────────────────────────
 # Each rectangular face → 2 triangles.
 # Vertices are ordered so the cross product of (v2-v1) × (v3-v1) gives the
@@ -198,37 +163,18 @@ def main():
     body_tris = read_stl(body_path)
     print(f"  {len(body_tris)} triangles")
 
-    body_patches = classify_body_triangles(body_tris)
-    print("  Patch breakdown:")
-    for name, tris in body_patches.items():
-        status = f"{len(tris)} triangles" if tris else "0 triangles (skipped)"
-        print(f"    {name}: {status}")
-
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Body-only ASCII STL — used as surfaceFile with boundsDict domain definition.
-    body_only_path = out_path.parent / "ahmed_body.stl"
-    print(f"Writing body-only STL: {body_only_path}")
-    with open(body_only_path, "w") as f:
-        for name, tris in body_patches.items():
-            if tris:
-                write_ascii_stl(f, name, tris)
-    print(f"  {len(body_tris)} triangles across {sum(1 for t in body_patches.values() if t)} patches")
-
-    # Combined STL: split body patches + domain boundary faces.
-    print(f"Writing combined STL: {out_path}")
     domain = domain_faces()
+    print(f"Writing combined STL: {out_path}")
     with open(out_path, "w") as f:
-        for name, tris in body_patches.items():
-            if tris:
-                write_ascii_stl(f, name, tris)
+        write_ascii_stl(f, "ahmed_body", body_tris)
         for patch_name, tris in domain.items():
             write_ascii_stl(f, patch_name, tris)
 
-    active_body = [n for n, t in body_patches.items() if t]
     total = len(body_tris) + sum(len(t) for t in domain.values())
     print(f"  {total} triangles total")
-    print(f"  Body patches: {', '.join(active_body)}")
+    print(f"  Body patch: ahmed_body ({len(body_tris)} triangles)")
     print(f"  Domain patches: {', '.join(domain.keys())}")
     print(f"  Domain: x=[{XMIN}, {XMAX}]  y=[{YMIN}, {YMAX}]  z=[{ZMIN}, {ZMAX}]")
 

@@ -22,19 +22,23 @@ boundaryLayers
 {
     patchBoundaryLayers
     {
+        // Single ahmed_body patch covers all body surfaces including slant,
+        // underbody, and diffuser — allowDiscontinuity permits layer count
+        // to reduce at concave junctions (e.g. underbody corners at low
+        // ride heights) without failing the mesh.
         "ahmed_body"
         {
-            nLayers                  20;
+            nLayers                  5;
             thicknessRatio            1.2;
-            maxFirstLayerThickness    5e-6;
-            allowDiscontinuity        0;
+            maxFirstLayerThickness    1e-3;
+            allowDiscontinuity        1;
         }
 
         "ground"
         {
-            nLayers                  15;
+            nLayers                  5;
             thicknessRatio            1.2;
-            maxFirstLayerThickness    2e-5;
+            maxFirstLayerThickness    1e-3;
             allowDiscontinuity        0;
         }
     }

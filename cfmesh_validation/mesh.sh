@@ -8,7 +8,7 @@
 #   1. FreeCAD → ahmed_body_raw.stl  (canonical: 25° slant, 0° diffuser)
 #   2. generate_domain_stl.py → ahmed_domain.stl  (body + domain, named patches)
 #   3. cartesianMesh         (Cartesian background mesh, no BL)
-#   4. generateBoundaryLayers (prismatic BL layers: body 20L y1=5e-6m, ground 15L y1=2e-5m)
+#   4. generateBoundaryLayers (prismatic BL layers: body only, 3L y1=5e-4m, wall functions)
 #   5. renumberMesh -overwrite (fix face ordering + Cuthill-McKee bandwidth reduction)
 #   6. checkMesh             (report non-orthogonality, skewness, cell counts)
 
