@@ -33,7 +33,7 @@ solvers
 }
 SIMPLE
 {
-    nNonOrthogonalCorrectors 2;
+    nNonOrthogonalCorrectors 1;
     consistent      yes;
     residualControl { p 1e-5; U 1e-5; "(k|omega)" 1e-4; }
 }
