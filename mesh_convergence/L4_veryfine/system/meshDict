@@ -1,0 +1,93 @@
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object meshDict; }
+
+surfaceFile "constant/triSurface/ahmed_domain.stl";
+
+maxCellSize 0.089;
+minCellSize 0.004;
+
+objectRefinements
+{
+    farWake
+    {
+        type     box;
+        cellSize 0.044;
+        centre   ( 7.5  0.0  0.40 );
+        lengthX  13.0;
+        lengthY   1.20;
+        lengthZ   0.80;
+    }
+
+    nearWake
+    {
+        type     box;
+        cellSize 0.022;
+        centre   ( 1.85  0.0  0.275 );
+        lengthX   4.30;
+        lengthY   0.70;
+        lengthZ   0.55;
+    }
+
+    bodyProximity
+    {
+        type     box;
+        cellSize 0.011;
+        centre   ( 0.525  0.0  0.22 );
+        lengthX   1.45;
+        lengthY   0.60;
+        lengthZ   0.44;
+    }
+}
+
+localRefinement
+{
+    "ahmed_body" { cellSize 0.004; }
+}
+
+boundaryLayers
+{
+    patchBoundaryLayers
+    {
+        "ahmed_body"
+        {
+            nLayers                  5;
+            thicknessRatio            1.2;
+            maxFirstLayerThickness    2.2e-2;
+            allowDiscontinuity        1;
+        }
+    }
+
+    optimiseLayer 1;
+
+    optimisationParameters
+    {
+        nSmoothNormals       5;
+        maxNumIterations     5;
+        featureSizeFactor    0.2;
+        reCalculateNormals   1;
+        relThicknessTol      0.1;
+    }
+}
+
+meshQualitySettings
+{
+    maxNonOrthogonality   70;
+    maxSkewness            4;
+    minVolume          1e-15;
+}
+
+renameBoundary
+{
+    defaultName   defaultFaces;
+    defaultType   wall;
+
+    newPatchNames
+    {
+        "ahmed_body" { newName ahmed_body; type wall; }
+        "inlet"      { newName inlet;      type patch; }
+        "outlet"     { newName outlet;     type patch; }
+        "ground"     { newName ground;     type wall; }
+        "top"        { newName top;        type patch; }
+        "side1"      { newName side1;      type patch; }
+        "side2"      { newName side2;      type patch; }
+    }
+}

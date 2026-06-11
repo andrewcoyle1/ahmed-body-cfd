@@ -1,14 +1,65 @@
-FoamFile { version 2.0; format ascii; class volScalarField; object omega; }
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2512                                  |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      binary;
+    arch        "LSB;label=32;scalar=64";
+    class       volScalarField;
+    location    "0";
+    object      omega;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
 dimensions      [0 0 -1 0 0 0 0];
-internalField   uniform 1000.0;
+
+internalField   uniform 1000;
+
 boundaryField
 {
-    inlet           { type fixedValue; value uniform 1000.0; }
-    outlet          { type inletOutlet; inletValue uniform 1000.0; value uniform 1000.0; }
-    ground          { type omegaWallFunction; value uniform 1000.0; }
-    top             { type zeroGradient; }
-    side1           { type zeroGradient; }
-    side2           { type zeroGradient; }
-    ahmed_body      { type omegaWallFunction; value uniform 1000.0; }
-    defaultFaces    { type zeroGradient; }
+    ahmed_body
+    {
+        type            omegaWallFunction;
+        value           uniform 1000;
+    }
+    inlet
+    {
+        type            fixedValue;
+        value           uniform 1000;
+    }
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform 1000;
+        value           uniform 1000;
+    }
+    ground
+    {
+        type            omegaWallFunction;
+        value           uniform 1000;
+    }
+    top
+    {
+        type            zeroGradient;
+    }
+    side1
+    {
+        type            zeroGradient;
+    }
+    side2
+    {
+        type            zeroGradient;
+    }
+    defaultFaces
+    {
+        type            zeroGradient;
+    }
 }
+
+
+// ************************************************************************* //
