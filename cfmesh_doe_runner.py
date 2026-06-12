@@ -17,10 +17,19 @@ Usage:
   python3 cfmesh_doe_runner.py --resume      # skip already-completed cases
 """
 
-import os, sys, shutil, subprocess, time, re
+import os, sys, shutil, subprocess, time, re, importlib.util
 import numpy as np
 import pandas as pd
 from pathlib import Path
+
+# Import case_manager from the same directory as this file
+_cm_spec = importlib.util.spec_from_file_location(
+    "case_manager", Path(__file__).parent / "case_manager.py")
+_cm = importlib.util.module_from_spec(_cm_spec)
+_cm_spec.loader.exec_module(_cm)
+CaseState    = _cm.CaseState
+CaseStatus   = _cm.Status
+resume_action = _cm.resume_action
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -470,66 +479,101 @@ def extract_results(case_dir: Path) -> dict:
 # ─── Main case runner ─────────────────────────────────────────────────────────
 
 def run_case(case_id: str, params: dict, resume: bool = False, cases_dir: Path = None) -> dict:
+    """
+    Build mesh and solve one case.  State is tracked in <case_dir>/case.status
+    so any interruption can be resumed correctly.
+
+    resume=False : always clean-restart (ignore existing state)
+    resume=True  : follow the resume_action() state table
+    """
     if cases_dir is None:
         cases_dir = CASES_DIR
     case_dir = cases_dir / case_id
-    case_dir.mkdir(parents=True, exist_ok=True)
+    state    = CaseState(case_dir)
 
     log = case_dir / "log.pipeline"
+    case_dir.mkdir(parents=True, exist_ok=True)
 
-    def status(msg):
+    def log_msg(msg):
         ts = time.strftime("%H:%M:%S")
         line = f"[{ts}] {case_id}  {msg}"
         print(line, flush=True)
         with open(log, "a") as f:
             f.write(line + "\n")
 
-    # Skip if already fully solved
-    if resume and (case_dir / "log.simpleFoam").exists():
-        txt = (case_dir / "log.simpleFoam").read_text(errors="replace")
-        if "End" in txt:
-            res = extract_results(case_dir)
-            status(f"SKIP (already done)  Cd={res['Cd']}  Cl={res['Cl']}")
-            return res
+    # ── Determine what to do ──────────────────────────────────────────────────
+    action = resume_action(case_dir) if resume else "clean_restart"
 
-    # Resume from checkpoint if one exists
-    checkpoint = find_checkpoint(case_dir) if resume else 0
+    if action == "skip":
+        res = extract_results(case_dir)
+        log_msg(f"SKIP (done)  Cd={res['Cd']}  Cl={res['Cl']}")
+        return {**res, "skipped": True}
+
+    if action == "clean_restart":
+        if case_dir.exists():
+            shutil.rmtree(case_dir)
+        case_dir.mkdir(parents=True)
+        state = CaseState(case_dir)
 
     t0 = time.time()
     try:
-        if checkpoint > 0:
-            status(f"RESUME from checkpoint t={checkpoint}")
-            continue_solve(case_dir, checkpoint)
-        else:
-            status(f"STL  slant={params['slant_angle']:.1f}° diff={params['diffuser_angle']:.1f}° rh={params['ride_height']:.0f}mm r={params['front_radius']:.0f}mm")
+        # ── Mesh phase ────────────────────────────────────────────────────────
+        if action in ("clean_restart", "fresh"):
+            log_msg(f"STL  slant={params['slant_angle']:.1f}° diff={params['diffuser_angle']:.1f}°"
+                    f" rh={params['ride_height']:.0f}mm r={params['front_radius']:.0f}mm")
+            state.set(CaseStatus.MESHING)
+
             generate_stl(params, case_dir)
-
-            status("domain STL")
+            log_msg("domain STL")
             generate_domain_stl(params, case_dir)
-
-            status("copy mesh template")
+            log_msg("copy mesh template")
             copy_mesh_template(case_dir)
             write_case_controldict(case_dir)
-
-            status("cartesianMesh + BL")
+            log_msg("cartesianMesh + BL")
             build_mesh(case_dir)
-
-            status("topoSet + subsetMesh (half-domain)")
+            log_msg("topoSet + subsetMesh (half-domain)")
             cut_half_domain(case_dir)
 
-            status("write 0/ ICs")
-            write_initial_conditions(case_dir)
+            state.set(CaseStatus.MESH_DONE)
+            action = "solve_only"   # fall through to solve
 
-            status(f"simpleFoam {N_ITERS} iters × {N_CORES} cores")
+        # ── Solve phase ───────────────────────────────────────────────────────
+        if action == "solve_only":
+            log_msg("write 0/ ICs")
+            write_initial_conditions(case_dir)
+            write_case_controldict(case_dir)
+            state.set(CaseStatus.SOLVING)
+            log_msg(f"simpleFoam {N_ITERS} iters × {N_CORES} cores")
             solve(case_dir)
 
+        elif action == "resume_solve":
+            checkpoint = find_checkpoint(case_dir)
+            if checkpoint > 0:
+                log_msg(f"RESUME solve from checkpoint t={checkpoint}")
+                state.set(CaseStatus.SOLVING, f"resuming from t={checkpoint}")
+                continue_solve(case_dir, checkpoint)
+            else:
+                # No checkpoint — re-solve from scratch (mesh stays)
+                log_msg("RESUME: no checkpoint found, re-solving from t=0")
+                write_initial_conditions(case_dir)
+                write_case_controldict(case_dir)
+                state.set(CaseStatus.SOLVING)
+                solve(case_dir)
+
+        # ── Extract and mark done ─────────────────────────────────────────────
         res = extract_results(case_dir)
+        if res["Cd"] is None:
+            raise RuntimeError("extract_results returned None — forceCoeffs output missing")
+
+        state.set(CaseStatus.DONE)
         elapsed = time.time() - t0
-        status(f"DONE  Cd={res['Cd']}  Cl={res['Cl']}  f={res['Cd']+(1/3)*res['Cl']:.4f}  t={elapsed:.0f}s")
+        f1 = res["Cd"] + (1/3) * res["Cl"]
+        log_msg(f"DONE  Cd={res['Cd']}  Cl={res['Cl']}  f={f1:.4f}  t={elapsed:.0f}s")
         return res
 
     except Exception as e:
-        status(f"FAILED: {e}")
+        state.set(CaseStatus.FAILED, str(e))
+        log_msg(f"FAILED: {e}")
         return {"Cd": None, "Cl": None, "error": str(e)}
 
 

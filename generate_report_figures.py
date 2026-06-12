@@ -605,6 +605,43 @@ def fig_pareto():
     save(fig, "pareto_front")
 
 
+def fig_slant_trend():
+    """Cd vs slant angle: computed L2 RANS vs Ahmed (1984) experimental trend."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    df = pd.read_csv(BASE / "results" / "slant_sweep.csv")
+    df = df.sort_values("slant_angle")
+
+    ahmed_slant = [12.5, 20.0, 25.0, 30.0, 35.0]
+    ahmed_cd    = [0.230, 0.255, 0.299, 0.380, 0.300]
+
+    fig, ax = plt.subplots(figsize=(5.5, 3.5))
+
+    ax.plot(df["slant_angle"], df["Cd"], "o-", color="#0569B9",
+            linewidth=1.5, markersize=6, label="L2 RANS (kOmegaSST, computed)")
+    ax.plot(ahmed_slant, ahmed_cd, "s--", color="#CC3311",
+            linewidth=1.5, markersize=6, label=r"Ahmed (1984) experimental")
+
+    ax.axvline(x=30, color="gray", linestyle=":", linewidth=1.0, alpha=0.7)
+    ax.text(30.3, 0.235, "critical\nangle\n(exp.)", fontsize=7, color="gray", va="bottom")
+
+    ax.set_xlabel(r"Slant angle $\alpha_\mathrm{slant}$ (°)")
+    ax.set_ylabel(r"$C_d$")
+    ax.set_title(r"$C_d$–slant trend: L2 RANS vs Ahmed (1984)")
+    ax.legend(frameon=False, fontsize=8)
+    ax.set_xlim(10, 38)
+    ax.set_ylim(0.20, 0.52)
+    ax.grid(True, linestyle=":", alpha=0.4)
+    fig.tight_layout()
+
+    out = FIGS / "slant_trend.png"
+    fig.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  slant_trend → {out}")
+
+
 # ── Run all ───────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("Generating report figures → cfd_report/figures/\n")
@@ -618,4 +655,5 @@ if __name__ == "__main__":
     fig_sobol()
     fig_bo_convergence()
     fig_pareto()
+    fig_slant_trend()
     print("\nDone.")

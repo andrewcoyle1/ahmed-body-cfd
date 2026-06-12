@@ -399,24 +399,33 @@ Moving away from the optimum in the $+\alpha_d$ and $+\alpha_s$ directions revea
 
 The absolute drag validation against experiment compares the L3 baseline geometry ($\alpha_\mathrm{slant}=25^\circ$, $\alpha_\mathrm{diff}=0^\circ$) to the Lienhart wind-tunnel reference ($C_d=0.299$): the L3 RANS predicts $C_d=0.325$, an 8.7\% over-prediction consistent with kOmegaSST in the separated Ahmed body regime. A stronger validation is to reproduce the characteristic Cd-vs-slant-angle \emph{trend} measured by Ahmed et al.~\cite{ahmed1984}: a rising $C_d$ up to the critical angle, followed by a sharp drop as the trailing vortex system breaks down and the slant separates fully.
 
-Five L2 solves at fixed $\alpha_\mathrm{diff}=0^\circ$ across the slant-angle range are in progress; results will populate Table~\ref{tab:slant_sweep} and Figure~\ref{fig:slant_trend}.
+Five L2 RANS solves at fixed $\alpha_\mathrm{diff}=0^\circ$ were run across the slant-angle range (Table~\ref{tab:slant_sweep}, Figure~\ref{fig:slant_trend}). The computed $C_d$ rises monotonically from $0.293$ at $12.5^\circ$ to $0.464$ at $35^\circ$. Qualitatively, the sub-critical rising trend ($12.5^\circ$--$30^\circ$) agrees with Ahmed (1984): both show a steady increase driven by growing C-pillar vortex strength. However, the super-critical $C_d$ drop observed experimentally at $35^\circ$ ($C_d \approx 0.300$) is absent in the simulation — the model predicts $C_d = 0.464$, a $55\%$ over-prediction at this angle.
+
+This is a known limitation of steady kOmegaSST in the Ahmed body transition regime: the model delays the onset of full slant separation, effectively shifting the critical angle upward relative to experiment. The flow at $35^\circ$ remains in a partially-attached RANS state rather than the fully-separated state observed experimentally. This finding is consistent with the BO campaign results, where the surrogate identified $38.9^\circ$ as optimal — the RANS model continues to treat higher slant angles as beneficial because the critical-angle transition and associated $C_d$ reduction do not occur within the $15$--$40^\circ$ design space as modelled. The trend validation therefore confirms that the absolute performance predictions in the super-critical regime are unreliable, further motivating a URANS campaign in which the bistable transition is resolved time-accurately.
 
 \begin{table}[h]
   \centering
-  \caption{Computed $C_d$ vs slant angle at $\alpha_\mathrm{diff}=0^\circ$ (L2 mesh, kOmegaSST). Ahmed (1984) experimental values included for trend comparison.}
+  \caption{Computed $C_d$ vs slant angle at $\alpha_\mathrm{diff}=0^\circ$ (L2 mesh, kOmegaSST) compared to Ahmed (1984) experimental trend.}
   \label{tab:slant_sweep}
-  \begin{tabular}{lccc}
+  \begin{tabular}{lcccc}
     \toprule
-    $\alpha_\mathrm{slant}$ (°) & $C_d$ (computed, L2) & $C_d$ (Ahmed 1984\textsuperscript{a}) & Flow regime \\
+    $\alpha_\mathrm{slant}$ (°) & $C_d$ (L2 RANS) & $C_l$ (L2 RANS) & $C_d$ (Ahmed 1984\textsuperscript{a}) & Flow regime \\
     \midrule
-    12.5 & \textit{pend.} & ${\approx}$0.230 & Sub-critical, attached \\
-    20.0 & \textit{pend.} & ${\approx}$0.255 & Sub-critical, growing vortex \\
-    25.0 & \textit{pend.} & 0.299  & Lienhart reference \cite{lienhart2002} \\
-    30.0 & \textit{pend.} & ${\approx}$0.380 & Near-critical, maximum $C_d$ \\
-    35.0 & \textit{pend.} & ${\approx}$0.300 & Super-critical, fully separated \\
+    12.5 & 0.293 & $+$0.078 & ${\approx}$0.230 & Sub-critical, attached \\
+    20.0 & 0.303 & $+$0.205 & ${\approx}$0.255 & Sub-critical, growing vortex \\
+    25.0 & 0.326 & $+$0.074 & 0.299 \cite{lienhart2002} & Lienhart reference \\
+    30.0 & 0.363 & $+$0.329 & ${\approx}$0.380 & Near-critical, max $C_d$ \\
+    35.0 & \textbf{0.464} & $+$0.436 & ${\approx}$0.300 & \textbf{RANS fails: no transition} \\
     \bottomrule
-    \multicolumn{4}{l}{\textsuperscript{a}Approximate values from Ahmed et al.~\cite{ahmed1984} Fig.~11; geometry: $\alpha_\mathrm{diff}=0^\circ$, no raised floor.}\\
+    \multicolumn{5}{l}{\textsuperscript{a}Approximate values from Ahmed et al.~\cite{ahmed1984} Fig.~11; $\alpha_\mathrm{diff}=0^\circ$, no raised floor.}\\
   \end{tabular}
 \end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.65\textwidth]{../cfd_report/figures/slant_trend.png}
+  \caption{$C_d$ vs slant angle: L2 RANS (circles) vs Ahmed (1984) experimental data (squares). The experimental critical-angle drop at ${\approx}30^\circ$ is absent in the RANS prediction; the model remains in a partially-attached regime up to $35^\circ$ and beyond.}
+  \label{fig:slant_trend}
+\end{figure}
 
 
