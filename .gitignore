@@ -66,6 +66,8 @@ cfd_report/*.pdf
 doe_output/
 des_output/
 results/
+# macOS case-insensitive: exempt the LaTeX Results section from the results/ rule
+!cfd_report/[Rr]esults/
 design_matrix.csv
 *.pkl
 *.json
