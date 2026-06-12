@@ -36,6 +36,11 @@
 
 %% Graphics and floats
 \usepackage{graphicx}
+\usepackage{pgf}
+\graphicspath{{../results/}}
+\DeclareGraphicsExtensions{.pdf,.png,.jpg}
+% Include a matplotlib PGF figure at a given width
+\newcommand{\pgffig}[2]{\resizebox{#1}{!}{\input{figures/#2.pgf}}}
 \usepackage{float}
 \usepackage{caption}
 \usepackage{subcaption}

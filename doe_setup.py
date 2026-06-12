@@ -53,31 +53,23 @@ PARAMETERS = [
         "unit":        "deg",
         "description": "Underbody diffuser angle"
     },
-    {
-        "name":        "ride_height",
-        "lower":       30.0,
-        "upper":       80.0,
-        "unit":        "mm",
-        "description": "Ground clearance (ride height)"
-    },
-    {
-        "name":        "front_radius",
-        "lower":       50.0,
-        "upper":       139.0,
-        "unit":        "mm",
-        "description": "Front edge radius"
-    },
 ]
+
+# Parameters fixed at nominal values after Phase 1 Sobol sensitivity analysis.
+# front_radius: ST=0.001 (negligible); ride_height: ST=0.096 (moderate but weak
+# relative to slant/diffuser). Both fixed at Lienhart reference geometry defaults.
+FIXED_PARAMETERS = {
+    "ride_height":  50.8,   # mm — Lienhart nominal ground clearance
+    "front_radius": 100.0,  # mm — default nose fillet radius
+}
 
 # ─── 2. SAMPLING CONFIGURATION ───────────────────────────────────────────────
 
-N_SAMPLES    = 30      # number of CFD design points
-                       # rule of thumb: >= 5-10x number of parameters
-                       # 30 points for 4 params gives a well-conditioned surrogate
+N_SAMPLES    = 50      # denser phase-2 sweep: 25× per parameter in 2D
 RANDOM_SEED  = 42      # fix for reproducibility — document this in your report
 N_CANDIDATES = 10      # number of LHS replicates to pick the best space-filling design
 
-OUTPUT_DIR   = Path("doe_output")
+OUTPUT_DIR   = Path("doe_phase2")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 
@@ -205,11 +197,14 @@ def plot_1d_projections(unit_samples: np.ndarray, physical_samples: np.ndarray,
 def export_csv(physical_samples: np.ndarray, params: list, output_dir: Path) -> pd.DataFrame:
     """
     Export all design points to CSV.
-    Columns: case_id + one column per parameter (physical units).
-    This becomes your master run matrix — link CFD results back to it later.
+    Columns: case_id + one column per active parameter + fixed parameters.
+    Fixed parameters are appended as constant columns so downstream runners
+    (cfmesh_doe_runner.py) require no changes.
     """
     df = pd.DataFrame(physical_samples, columns=[p["name"] for p in params])
     df.insert(0, "case_id", [f"case_{i:03d}" for i in range(len(df))])
+    for name, val in FIXED_PARAMETERS.items():
+        df[name] = val
     path = output_dir / "design_matrix.csv"
     df.to_csv(path, index=False, float_format="%.4f")
     print(f"Design matrix saved   → {path}  ({len(df)} cases)")

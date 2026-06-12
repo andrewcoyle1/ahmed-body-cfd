@@ -70,6 +70,8 @@ import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 from pathlib import Path
 from itertools import combinations
+from SALib.sample import saltelli
+from SALib.analyze import sobol as sobol_analyze
 
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern, WhiteKernel, ConstantKernel
@@ -83,19 +85,17 @@ warnings.filterwarnings("ignore")
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
-RESULTS_CSV  = Path("results/results_summary.csv")
+RESULTS_CSV  = Path("results/results_phase2.csv")
 RESULTS_DIR  = Path("results")
 
-FEATURES     = ["slant_angle", "diffuser_angle", "ride_height", "front_radius"]
-FEATURE_LABELS = ["Slant angle (°)", "Diffuser angle (°)", "Ride height (mm)", "Front radius (mm)"]
+FEATURES     = ["slant_angle", "diffuser_angle"]
+FEATURE_LABELS = ["Slant angle (°)", "Diffuser angle (°)"]
 
-# Design space bounds — match doe_setup.py ranges exactly.
-# front_radius upper bound clamped to 139 mm (H/2 - 5 mm geometric limit).
+# Design space bounds — Phase 2: 2-variable space only.
+# ride_height fixed at 50.8 mm, front_radius fixed at 100 mm.
 BOUNDS = {
-    "slant_angle":    (15.0,  40.0),
-    "diffuser_angle": ( 0.0,  20.0),
-    "ride_height":    (30.0,  80.0),
-    "front_radius":   (50.0, 139.0),
+    "slant_angle":    (15.0, 40.0),
+    "diffuser_angle": ( 0.0, 20.0),
 }
 
 # Exploration–exploitation trade-off for EI.  ξ=0.01 is the standard default;
@@ -106,17 +106,15 @@ EI_XI_LOCAL = 0.001   # tighter exploitation for local refinement
 # ── Local refinement: tighter search box around the known best ────────────────
 # Best found: slant=40°, diffuser=11.9°, ride_height=68.6mm, front_radius=50mm
 LOCAL_BOUNDS = {
-    "slant_angle":    (35.0, 40.0),
-    "diffuser_angle": ( 7.0, 17.0),
-    "ride_height":    (58.0, 78.0),
-    "front_radius":   (50.0, 75.0),
+    "slant_angle":    (28.0, 40.0),
+    "diffuser_angle": ( 5.0, 15.0),
 }
 
 # Cases excluded from GP training — physically inconsistent outliers that
 # saturate the noise kernel and corrupt EI calculations.
 OUTLIER_CASES = set()   # populated manually if a case proves physically inconsistent
 
-BO_CASES_DIR = Path("openfoam_cases")   # same directory as DoE cases
+BO_CASES_DIR = Path(__file__).parent / "openfoam_cases_phase2"
 
 # ── F1 aerodynamic objective ──────────────────────────────────────────────────
 # In Formula 1 aerodynamics, downforce is worth approximately 3× more than
@@ -249,18 +247,22 @@ def plot_validation(y_cd, y_cl, cd_loo, cl_loo, cd_std, cl_std):
 # ─── 4. RESPONSE SURFACES ─────────────────────────────────────────────────────
 
 def plot_response_surfaces(gp_cd: GaussianProcessRegressor, scaler: StandardScaler, X: np.ndarray):
-    """Six 2D slices through the 4D space; remaining dims held at their median."""
-    medians = np.median(X, axis=0)  # shape (4,)
-    pairs = list(combinations(range(4), 2))   # 6 pairs
+    """2D response surface for all feature pairs (or single plot for 2-variable space)."""
+    n = len(FEATURES)
+    medians = np.median(X, axis=0)
+    pairs = list(combinations(range(n), 2))
 
-    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+    ncols = max(1, len(pairs))
+    fig, axes = plt.subplots(1, ncols, figsize=(6 * ncols, 5))
+    if ncols == 1:
+        axes = [axes]
     fig.suptitle("GP Surrogate — $C_d$ Response Surfaces (other dims at median)", fontsize=13)
 
-    for ax, (i, j) in zip(axes.flat, pairs):
+    for ax, (i, j) in zip(axes, pairs):
         b_i = BOUNDS[FEATURES[i]]
         b_j = BOUNDS[FEATURES[j]]
-        xi = np.linspace(*b_i, 50)
-        xj = np.linspace(*b_j, 50)
+        xi = np.linspace(*b_i, 80)
+        xj = np.linspace(*b_j, 80)
         II, JJ = np.meshgrid(xi, xj)
 
         grid = np.tile(medians, (II.size, 1))
@@ -476,7 +478,10 @@ def maximise_ei(
     return result.x, -result.fun
 
 
-BO_N_CORES = 10  # cores per Bayesian loop case (one case at a time → use all cores)
+BO_N_CORES = 8   # cores per BO case
+
+# Fixed parameters removed from design space after Sobol analysis
+BO_FIXED_PARAMS = {"ride_height": 50.8, "front_radius": 100.0}
 
 
 def run_bo_case(
@@ -484,71 +489,30 @@ def run_bo_case(
     params: dict,
 ) -> tuple[float | None, float | None, bool]:
     """
-    Write, run, and post-process a single Bayesian optimisation CFD case.
+    Write, run, and post-process a single BO CFD case using cfmesh_doe_runner.
 
-    The case is written into BO_CASES_DIR using the same case_generator
-    machinery as the DoE, so all mesh settings, BCs, and solver config are
-    identical to the training data.
-
-    Unlike the DoE (4 serial cases in parallel), BO runs one case at a time
-    so all BO_N_CORES cores are given to that single case via MPI parallelism
-    (decomposePar + mpirun -np {BO_N_CORES} + reconstructPar).
-
-    Returns
-    -------
-    cd        : converged Cd or None on failure
-    cl        : converged Cl or None on failure
-    converged : True if residuals met threshold
+    params contains only the active FEATURES (slant_angle, diffuser_angle).
+    Fixed parameters are added automatically from BO_FIXED_PARAMS.
     """
-    import subprocess
     import importlib.util
 
-    # Lazy-import case_generator and post_processor to avoid circular imports
     def _load(name, fpath):
         spec = importlib.util.spec_from_file_location(name, fpath)
         mod  = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         return mod
 
-    cg = _load("case_generator", Path(__file__).parent / "case_generator.py")
-    pp = _load("post_processor",  Path(__file__).parent / "post_processor.py")
+    runner = _load("cfmesh_doe_runner", Path(__file__).parent / "cfmesh_doe_runner.py")
 
-    case_dir = cg.write_case(case_id, params, BO_CASES_DIR, n_cores=BO_N_CORES, n_iters=3000)
-    print(f"    Case written → {case_dir}  ({BO_N_CORES} cores)")
+    full_params = {**params, **BO_FIXED_PARAMS}
+    print(f"    Running CFD: slant={full_params['slant_angle']:.2f}° diff={full_params['diffuser_angle']:.2f}°")
 
-    # Write params immediately so dashboard can show them while CFD runs
-    import json as _json
-    (case_dir / "params.json").write_text(_json.dumps(params, indent=2))
+    res = runner.run_case(case_id, full_params, resume=False, cases_dir=BO_CASES_DIR)
+    cd = res.get("Cd")
+    cl = res.get("Cl")
+    converged = cd is not None
 
-    run_sh = case_dir / "run.sh"
-    log_path = case_dir / "bo_run.log"
-
-    # Kill any orphaned containers mounting this case directory before launching.
-    # docker --filter volume= only matches named volumes, not bind-mounts, so we
-    # inspect all running containers and stop any whose Mounts include this path.
-    case_path = str(case_dir.resolve())
-    subprocess.run(
-        ["bash", "-c",
-         f'docker ps -q | xargs -r docker inspect --format '
-         f'"{{{{.Id}}}} {{{{range .Mounts}}}}{{{{.Source}}}} {{{{end}}}}"'
-         f' | grep "{case_path}" | awk \'{{print $1}}\' | xargs -r docker stop'],
-        capture_output=True,
-    )
-
-    print(f"    Running CFD (this takes ~53 min)…")
-    result = subprocess.run(
-        ["bash", str(run_sh)],
-        stdout=open(log_path, "w"),
-        stderr=subprocess.STDOUT,
-    )
-
-    if result.returncode != 0:
-        print(f"    ERROR: CFD failed for {case_id} — check {log_path}")
-        return None, None, False
-
-    force     = pp.extract_force_coeffs(case_dir)
-    converged = pp.check_convergence(case_dir)
-    return force.get("Cd"), force.get("Cl"), converged
+    return cd, cl, converged
 
 
 def bayesian_loop(
@@ -895,6 +859,136 @@ def validate_optimum(gp_cd: GaussianProcessRegressor, gp_cl: GaussianProcessRegr
     print(f"\n  Saved → {out}")
 
 
+# ─── 10. SOBOL SENSITIVITY ANALYSIS ──────────────────────────────────────────
+
+def compute_sobol_indices(
+    gp_cd: GaussianProcessRegressor,
+    gp_cl: GaussianProcessRegressor,
+    scaler: StandardScaler,
+    N: int = 2048,
+) -> dict:
+    """
+    Compute Sobol first-order (S1) and total-order (ST) sensitivity indices
+    for Cd, Cl, and the combined objective f = Cd + (1/3)*Cl.
+
+    Uses SALib's Saltelli sampler (N*(2d+2) = N*10 evaluations of the GP mean
+    for d=4 variables — no CFD runs required).  N=2048 gives ~20K samples,
+    sufficient for converged indices given the smooth GP response surface.
+
+    Returns a dict with keys 'Cd', 'Cl', 'f' each containing:
+        {'S1': array, 'S1_conf': array, 'ST': array, 'ST_conf': array}
+    """
+    problem = {
+        "num_vars": len(FEATURES),
+        "names":    FEATURES,
+        "bounds":   [BOUNDS[f] for f in FEATURES],
+    }
+
+    # Generate Saltelli sample (N*(2d+2) points)
+    param_values = saltelli.sample(problem, N, calc_second_order=False)
+
+    # Query GP mean — cheap, pure Python
+    X_s = scaler.transform(param_values)
+    cd_vals = gp_cd.predict(X_s)
+    cl_vals = gp_cl.predict(X_s)
+    f_vals  = cd_vals + (1.0 / 3.0) * cl_vals
+
+    results = {}
+    for name, Y in [("Cd", cd_vals), ("Cl", cl_vals), ("f", f_vals)]:
+        Si = sobol_analyze.analyze(problem, Y, calc_second_order=False, print_to_console=False)
+        results[name] = {
+            "S1":      Si["S1"],
+            "S1_conf": Si["S1_conf"],
+            "ST":      Si["ST"],
+            "ST_conf": Si["ST_conf"],
+        }
+
+    return results
+
+
+def plot_sobol(sobol_results: dict) -> Path:
+    """
+    Bar chart of first-order (S1) and total-order (ST) Sobol indices for
+    Cd, Cl, and f = Cd + Cl/3.  Error bars show 95% confidence intervals.
+
+    A variable with ST < 0.05 contributes < 5% of total output variance
+    (including interactions) and is a candidate for elimination from the
+    design space.
+    """
+    objectives  = ["Cd", "Cl", "f"]
+    titles      = [r"$C_d$", r"$C_l$", r"$f = C_d + \frac{1}{3}C_l$"]
+    labels      = [lbl.replace(" (°)", "\nangle").replace(" (mm)", "\n(mm)")
+                   for lbl in FEATURE_LABELS]
+    x           = np.arange(len(FEATURES))
+    width       = 0.35
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4), sharey=False)
+    fig.suptitle("Sobol Sensitivity Indices (GP surrogate, N=2048)", fontsize=12)
+
+    for ax, obj, title in zip(axes, objectives, titles):
+        S1   = sobol_results[obj]["S1"]
+        S1c  = sobol_results[obj]["S1_conf"]
+        ST   = sobol_results[obj]["ST"]
+        STc  = sobol_results[obj]["ST_conf"]
+
+        # Clamp negative values (numerical noise) to 0
+        S1  = np.maximum(S1, 0)
+        ST  = np.maximum(ST, 0)
+
+        bars1 = ax.bar(x - width/2, S1, width, label=r"$S_1$ (first-order)",
+                       color="#1A6FAF", alpha=0.85,
+                       yerr=S1c, capsize=4, error_kw={"elinewidth": 1})
+        barsT = ax.bar(x + width/2, ST, width, label=r"$S_T$ (total-order)",
+                       color="#E87722", alpha=0.85,
+                       yerr=STc, capsize=4, error_kw={"elinewidth": 1})
+
+        # Threshold line at 5%
+        ax.axhline(0.05, color="red", linestyle="--", linewidth=0.8, alpha=0.7,
+                   label="5% threshold")
+
+        ax.set_title(title, fontsize=11)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=8)
+        ax.set_ylim(0, 1.0)
+        ax.set_ylabel("Sensitivity index" if ax == axes[0] else "")
+        ax.legend(fontsize=7, loc="upper right")
+
+        # Annotate ST values on bars
+        for i, (st, stc) in enumerate(zip(ST, STc)):
+            ax.text(i + width/2, min(st + stc + 0.02, 0.95),
+                    f"{st:.2f}", ha="center", va="bottom", fontsize=7)
+
+    plt.tight_layout()
+    out = RESULTS_DIR / "sobol_sensitivity.png"
+    plt.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close()
+    return out
+
+
+def print_sobol_summary(sobol_results: dict):
+    """Print a ranked table of Sobol ST indices and flag weak variables."""
+    print("\n── Sobol sensitivity (total-order ST, f = Cd + Cl/3) ────────")
+    print(f"  {'Variable':<18}  {'S1':>6}  {'ST':>6}  {'ST_conf':>8}  Status")
+    print(f"  {'-'*18}  {'------':>6}  {'------':>6}  {'--------':>8}  ------")
+
+    ST   = sobol_results["f"]["ST"]
+    S1   = sobol_results["f"]["S1"]
+    STc  = sobol_results["f"]["ST_conf"]
+    order = np.argsort(ST)[::-1]
+
+    for i in order:
+        status = "STRONG" if ST[i] >= 0.10 else ("WEAK — candidate for removal" if ST[i] < 0.05 else "MODERATE")
+        print(f"  {FEATURES[i]:<18}  {max(S1[i],0):>6.3f}  {max(ST[i],0):>6.3f}  ±{STc[i]:>6.3f}   {status}")
+
+    weak = [FEATURES[i] for i in range(len(FEATURES)) if ST[i] < 0.05]
+    if weak:
+        print(f"\n  Variables with ST < 0.05 (< 5% of f variance, including interactions):")
+        for w in weak:
+            print(f"    → {w}: fix at nominal or drop from design space")
+    else:
+        print("\n  All variables contribute ≥ 5% — no clear candidates for elimination.")
+
+
 # ─── 10. MAIN ─────────────────────────────────────────────────────────────────
 
 def main():
@@ -945,6 +1039,25 @@ def main():
         print(f"  Cd  R²={r2_score(y_cd, cd_loo):.3f}  MAE={mean_absolute_error(y_cd, cd_loo):.4f}")
         print(f"  Cl  R²={r2_score(y_cl, cl_loo):.3f}  MAE={mean_absolute_error(y_cl, cl_loo):.4f}")
         plot_validation(y_cd, y_cl, cd_loo, cl_loo, cd_std, cl_std)
+
+    print("\n── Sobol sensitivity analysis ────────────────────────────────")
+    sobol_results = compute_sobol_indices(gp_cd, gp_cl, scaler, N=2048)
+    print_sobol_summary(sobol_results)
+    sobol_path = plot_sobol(sobol_results)
+    print(f"  Saved → {sobol_path}")
+
+    # Save raw indices to CSV for the report
+    rows = []
+    for obj in ("Cd", "Cl", "f"):
+        for i, feat in enumerate(FEATURES):
+            rows.append({
+                "objective": obj, "variable": feat,
+                "S1": round(float(np.maximum(sobol_results[obj]["S1"][i], 0)), 4),
+                "S1_conf": round(float(sobol_results[obj]["S1_conf"][i]), 4),
+                "ST": round(float(np.maximum(sobol_results[obj]["ST"][i], 0)), 4),
+                "ST_conf": round(float(sobol_results[obj]["ST_conf"][i]), 4),
+            })
+    pd.DataFrame(rows).to_csv(RESULTS_DIR / "sobol_indices.csv", index=False)
 
     print("\n── Response surfaces ─────────────────────────────────────────")
     plot_response_surfaces(gp_cd, scaler, X)

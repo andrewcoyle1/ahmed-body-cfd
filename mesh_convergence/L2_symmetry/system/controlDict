@@ -1,0 +1,35 @@
+FoamFile { version 2.0; format ascii; class dictionary; object controlDict; }
+application     simpleFoam;
+startFrom       latestTime;
+startTime       0;
+stopAt          endTime;
+endTime         1500;
+deltaT          1;
+writeControl    timeStep;
+writeInterval   1500;
+purgeWrite      1;
+writeFormat     binary;
+writePrecision  8;
+runTimeModifiable true;
+functions
+{
+    forceCoeffs
+    {
+        type            forceCoeffs;
+        libs            (forces);
+        writeControl    timeStep;
+        writeInterval   25;
+        patches         (ahmed_body ahmed_legs_base);
+        rho             rhoInf;
+        rhoInf          1.225;
+        magUInf         40.0;
+        lRef            1.044;
+        Aref            0.056;
+        coordinateSystem
+        {
+            origin  (0.522 0 0);
+            e1      (1 0 0);
+            e2      (0 1 0);
+        }
+    }
+}

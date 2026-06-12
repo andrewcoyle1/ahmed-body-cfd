@@ -1,0 +1,38 @@
+FoamFile { version 2.0; format ascii; class dictionary; object controlDict; }
+application     pimpleFoam;
+startFrom       startTime;
+startTime       0;
+stopAt          endTime;
+endTime         0.5;
+deltaT          5e-4;
+adjustTimeStep  yes;
+maxCo           5.0;
+maxDeltaT       5e-4;
+writeControl    runTime;
+writeInterval   0.05;
+purgeWrite      3;
+writeFormat     binary;
+writePrecision  8;
+runTimeModifiable true;
+functions
+{
+    forceCoeffs
+    {
+        type            forceCoeffs;
+        libs            (forces);
+        writeControl    timeStep;
+        writeInterval   1;
+        patches         (ahmed_body);
+        rho             rhoInf;
+        rhoInf          1.225;
+        magUInf         40.0;
+        lRef            1.044;
+        Aref            0.056;
+        coordinateSystem
+        {
+            origin  (0.522 0 0);
+            e1      (1 0 0);
+            e2      (0 1 0);
+        }
+    }
+}

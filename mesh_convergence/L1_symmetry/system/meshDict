@@ -1,0 +1,94 @@
+FoamFile { version 2.0; format ascii; class dictionary; location "system"; object meshDict; }
+
+surfaceFile "constant/triSurface/ahmed_domain.stl";
+
+maxCellSize 0.200;
+minCellSize 0.010;
+
+objectRefinements
+{
+    farWake
+    {
+        type     box;
+        cellSize 0.100;
+        centre   ( 7.5  0.30  0.40 );
+        lengthX  13.0;
+        lengthY   0.60;
+        lengthZ   0.80;
+    }
+
+    nearWake
+    {
+        type     box;
+        cellSize 0.050;
+        centre   ( 1.85  0.175  0.275 );
+        lengthX   4.30;
+        lengthY   0.35;
+        lengthZ   0.55;
+    }
+
+    bodyProximity
+    {
+        type     box;
+        cellSize 0.025;
+        centre   ( 0.525  0.15  0.22 );
+        lengthX   1.45;
+        lengthY   0.30;
+        lengthZ   0.44;
+    }
+}
+
+localRefinement
+{
+    "ahmed_body" { cellSize 0.010; }
+}
+
+boundaryLayers
+{
+    patchBoundaryLayers
+    {
+        "ahmed_body"
+        {
+            nLayers                  3;
+            thicknessRatio            1.2;
+            maxFirstLayerThickness    5e-2;
+            allowDiscontinuity        1;
+        }
+    }
+
+    optimiseLayer 1;
+
+    optimisationParameters
+    {
+        nSmoothNormals       5;
+        maxNumIterations     5;
+        featureSizeFactor    0.2;
+        reCalculateNormals   1;
+        relThicknessTol      0.1;
+    }
+}
+
+meshQualitySettings
+{
+    maxNonOrthogonality   70;
+    maxSkewness            4;
+    minVolume          1e-15;
+}
+
+renameBoundary
+{
+    defaultName   defaultFaces;
+    defaultType   wall;
+
+    newPatchNames
+    {
+        "ahmed_body"      { newName ahmed_body; type wall; }
+        "ahmed_legs_base" { newName ahmed_legs_base; type wall; }
+        "inlet"           { newName inlet;    type patch; }
+        "outlet"          { newName outlet;   type patch; }
+        "ground"          { newName ground;   type wall; }
+        "top"             { newName top;      type patch; }
+        "symmetry"        { newName symmetry; type symmetry; }
+        "side2"           { newName side2;    type patch; }
+    }
+}

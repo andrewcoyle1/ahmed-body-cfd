@@ -298,11 +298,26 @@ def process_case(case_id: str, design_row: pd.Series) -> dict:
 
 
 def main():
+    global CASES_DIR, DESIGN_MATRIX, RESULTS_CSV, RESULTS_DIR
+
+    # Allow --cases-dir, --design-matrix, --results-csv overrides
+    args = sys.argv[1:]
+    for i, a in enumerate(args):
+        if a == "--cases-dir" and i + 1 < len(args):
+            CASES_DIR = Path(args[i + 1]).resolve()
+        if a == "--design-matrix" and i + 1 < len(args):
+            DESIGN_MATRIX = Path(args[i + 1]).resolve()
+        if a == "--results-csv" and i + 1 < len(args):
+            RESULTS_CSV = Path(args[i + 1]).resolve()
+            RESULTS_DIR = RESULTS_CSV.parent
+            RESULTS_DIR.mkdir(exist_ok=True)
+
     dm = pd.read_csv(DESIGN_MATRIX).set_index("case_id")
 
     # If a specific case_id is passed on the command line, process only that one
-    if len(sys.argv) > 1:
-        target_cases = [a for a in sys.argv[1:] if a.startswith("case_")]
+    target_cases_arg = [a for a in args if a.startswith("case_")]
+    if target_cases_arg:
+        target_cases = target_cases_arg
     else:
         target_cases = list(dm.index)
 
