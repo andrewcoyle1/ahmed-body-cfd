@@ -130,12 +130,28 @@ An all-$y^+$ (blended) wall treatment is used throughout, which remains valid ac
 
 This avoids the requirement for $y^+ \approx 1$ (which would demand much finer near-wall cells and larger meshes) while still resolving boundary layers reasonably at the moderate Reynolds number of this study ($Re = 2.78 \times 10^6$).
 
-Figure~\ref{fig:wall_yplus} shows the $y^+$ distribution on the \texttt{ahmed\_body} patch at the optimum design point. The average $y^+ = 17.5$ (min 0.67, max 220) confirms the mesh operates in the buffer-to-log-law regime where the blended Spalding formulation is valid. Elevated $y^+$ at the leg bases (${\sim}180$) reflects stagnation-point impingement; low $y^+$ on the slant ($<10$) is consistent with the reduced wall shear in the separated region.
+Figure~\ref{fig:wall_yplus} shows the $y^+$ distribution on the \texttt{ahmed\_body} patch at the L2 optimum design point. Measured $y^+$ values are summarised in Table~\ref{tab:yplus_summary}.
+
+\begin{table}[h]
+  \centering
+  \caption{Wall $y^+$ statistics on the \texttt{ahmed\_body} patch for selected cases. All-$y^+$ blended Spalding treatment remains valid across the full range.}
+  \label{tab:yplus_summary}
+  \begin{tabular}{lcccl}
+    \toprule
+    Case & Mesh & $y^+_\mathrm{min}$ & $y^+_\mathrm{avg}$ & $y^+_\mathrm{max}$ \\
+    \midrule
+    L2 optimum ($32.5^\circ/8.9^\circ$, case~021) & L2 & 0.67 & 17.5 & 220 \\
+    MF optimum ($38.9^\circ/10.5^\circ$, verified) & L3 & 0.34 & 8.4  & 146 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Both meshes operate in the buffer-to-log-law regime where the blended Spalding formulation is valid. Elevated $y^+$ at the leg bases (${\sim}150$--$220$) reflects stagnation-point impingement; the slant face operates at $y^+ < 15$ on both meshes, which is within the blended formulation's valid range. However, it is important to note that slant \emph{separation onset} — the primary mechanism generating the downforce signal and thus most of the variation in the objective $f_1$ — is predicted at wall-function resolution rather than with a resolved viscous sublayer. This is the least reliable element of the model: kOmegaSST with Spalding wall functions is known to delay separation onset relative to low-$y^+$ formulations, and the L2 vs L3 discrepancy in $C_l$ (\S\ref{sec:l3_validation}) is partly attributable to this effect.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=0.85\textwidth]{figures/wall_yplus_optimum}
-  \caption{Wall $y^+$ distribution on the Ahmed body surface at the optimum design ($\alpha_\mathrm{slant}=32.5^\circ$, $\alpha_\mathrm{diff}=8.9^\circ$, L2 mesh). Average $y^+ = 17.5$; the all-$y^+$ blended wall treatment remains valid across the full range shown.}
+  \caption{Wall $y^+$ distribution on the Ahmed body surface at the L2 optimum design ($\alpha_\mathrm{slant}=32.5^\circ$, $\alpha_\mathrm{diff}=8.9^\circ$, L2 mesh). Average $y^+ = 17.5$; the all-$y^+$ blended wall treatment remains valid across the full range shown.}
   \label{fig:wall_yplus}
 \end{figure}
 

@@ -1,30 +1,16 @@
 \section{Discussion and Limitations}
 \label{sec:discussion}
 
-\subsection{Statistical Uncertainty of DES Time-Averaging}
+\subsection{Pseudo-time Oscillations and Averaging Uncertainty in Steady RANS}
 \label{sec:des_statistics}
 
-A fundamental assumption in the pipeline is that each DES run produces a well-converged time-mean $\overline{C_d}$ that can be used as a training observation for the correction GP. This assumption is examined by computing the effective number of independent samples in the averaging window.
+Steady simpleFoam solves do not always converge to a fixed point: near the critical slant angle ($\alpha_\mathrm{slant}\approx28$--$36^\circ$), the separated wake exhibits low-frequency unsteadiness that the RANS pseudo-time march cannot damp out, producing a limit-cycle oscillation in the force coefficients even at solver convergence. All 79 completed cases were audited by computing the standard deviation of $C_d$ and $C_l$ over the 200-iteration averaging window (iterations 600--800). Results are summarised below.
 
-Adjacent force coefficient samples at $\Delta t = 4\times10^{-4}$~s are strongly correlated: the integral time scale $\tau_{C_d}$ estimated from the autocorrelation function of the time series is $\approx12$~ms for $C_d$ and $\approx10$~ms for $C_l$. Over an averaging window of $T_\mathrm{avg} = 0.32$~s, this yields:
+For the majority of cases (those with attached or fully separated flow away from the critical regime) the pseudo-time oscillation is negligible: the median $\sigma_{C_d} = 0.003$ and median $\sigma_{C_l} = 0.015$ over the averaging window. However, 27 of 79 cases have $\sigma_{C_d} > 0.005$, indicating a limit-cycle regime. The worst offender is \texttt{case\_bo\_001} ($\alpha_\mathrm{slant}=35.7^\circ$, $\alpha_\mathrm{diff}=9.3^\circ$) with $\sigma_{C_d}=0.023$ and $\sigma_{C_l}=0.097$ — the BO iteration~1 point that returned $f_\mathrm{cfd}=0.642$. This case was verified to have a mesh of the same quality as the converged cases (${\sim}435$K cells, solver reaching \texttt{End}); the oscillation is a real flow-regime signature, not a numerical divergence. The high reported $f$ value is the mean of a non-stationary iterate rather than a well-converged aerodynamic prediction.
 
-\begin{equation}
-    N_\mathrm{eff} = \frac{T_\mathrm{avg}}{2\,\tau} \approx \frac{0.32}{0.024} \approx 13 \quad (C_d)
-    \label{eq:neff}
-\end{equation}
+Three consequences follow. First, the minimum detectable $C_d$ difference between two stable cases is ${\sim}2\times\sigma_{C_d}/\sqrt{N_\mathrm{win}}\approx 2\times0.003/\sqrt{9}\approx0.002$; for the worst oscillating cases this degrades to ${\sim}0.015$. Second, $C_l$ uncertainty dominates: the median $\sigma_{C_l}=0.015$ translates to a minimum detectable downforce difference of ${\sim}0.010$ per case; but for the critical-angle band the $\sigma_{C_l}$ can reach $0.10$, making individual $C_l$ observations unreliable as GP training data there. Third, the correction GP's WhiteKernel noise term correctly absorbs this structured uncertainty: anchors~004, 005 and 007 (all of which show elevated $\sigma_{C_l}$ in the audit) received larger inferred noise variances during hyperparameter optimisation, widening the correction GP's predictive bands in the critical-angle region (\S\ref{sec:flat_optimum}).
 
-independent observations, rather than the $813$ raw samples. The resulting 95\% confidence interval on the time-mean $\overline{C_d}$ per case is:
-
-\begin{equation}
-    \sigma_{\overline{C_d}} = \frac{1.96\,\sigma_{C_d}}{\sqrt{N_\mathrm{eff}}} \approx \frac{1.96\times0.013}{\sqrt{13}} \approx \pm0.007
-    \label{eq:cdci}
-\end{equation}
-
-For $C_l$ the situation is substantially worse: $\sigma_{\overline{C_l}} \approx \pm0.035$ per case, comparable to or larger than the inter-case $C_l$ differences the surrogate is attempting to learn.
-
-Three practical consequences follow. First, the minimum detectable $C_d$ difference between two cases at 95\% confidence is $2\times0.007 = 0.014$; the surrogate cannot reliably distinguish designs that differ by less than this. Second, surrogate-predicted $C_l$ differences below $\sim\!0.07$ should not be interpreted as significant. Third, the correction GP's WhiteKernel noise term, fitted during hyperparameter optimisation, should absorb the $\pm0.007$ per-case noise if the kernel is expressive enough---but this requires $N_\mathrm{eff}$ to be representative of the true noise distribution, which is not guaranteed when the DES cases are run at different parameter settings with different separated flow topologies.
-
-The recommended fix is to extend $t_\mathrm{end}$ from $0.45$~s to $1.0$~s for future campaigns. This quadruples the averaging window to $0.87$~s ($\approx33$ effective samples per case), halving $\sigma_{\overline{C_d}}$ to $\approx\pm0.004$ and making individual cases sufficient to detect differences of $\sim\!0.008$.
+The recommended fix for future campaigns is to replace steady simpleFoam with pimpleFoam (URANS) at the oscillating design points, using a physical time-averaging window of ${\sim}0.3$~s after initial transient decay. This would resolve the bistable flow mode directly and produce a well-defined time-mean rather than a pseudo-time average of an oscillation.
 
 \subsection{EI Non-Convergence and the Flat Optimum}
 \label{sec:flat_optimum}
@@ -33,7 +19,7 @@ The EI plateau at $\approx$0.005--0.01 across 20 BO iterations indicates a struc
 
 In physical terms, the high-slant regime ($\alpha_\mathrm{slant} > 35^\circ$) produces a slowly varying vortex topology where the aerodynamic response to geometry changes is broad and smooth rather than sharply peaked. The BO therefore spread evaluations across this region without converging to a single point, which is correct behaviour — the objective landscape does not have a sharp global minimum to converge onto.
 
-From a practical standpoint, EI non-convergence is not fatal: the GP surrogate correctly identified the global trend and confirmed case~021 ($\alpha_\mathrm{slant}=32.5^\circ$) as the incumbent through all 20 BO iterations. The MF co-Kriging correction (\S\ref{sec:mf_results}) then relocates the optimum accounting for the L2--L3 fidelity gap.
+From a practical standpoint, EI non-convergence is not fatal: the GP surrogate correctly identified the global trend and confirmed case~021 ($\alpha_\mathrm{slant}=32.5^\circ$) as the incumbent through all 20 BO iterations. The MF co-Kriging correction (\S\ref{sec:mf_results}) then relocates the optimum accounting for the L2--L3 fidelity gap. A secondary benefit of the stencil study (\S\ref{sec:stencil}) is that it explains retrospectively why EI concentrated on the $33$--$38^\circ$ band: the corrupted BO iteration~1 training point ($f=0.642$ at $35.7^\circ$, a pseudo-time oscillation artefact) inflated GP uncertainty in the transition region, directing acquisition away from the true high-slant basin. With the L3 re-solve ($f_1=0.215$, well-converged) the surrogate landscape would have been smoother and EI exploitation of the $38$--$40^\circ$ region more efficient.
 
 \subsection{Multi-Fidelity Correction and Optimum Verification}
 \label{sec:verification_gap}
@@ -52,6 +38,40 @@ With 8 anchor points in a 2-D space the correction GP is deliberately conservati
 The $k$-$\omega$~SST model used for the RANS DoE is known to under-predict mixing in separated shear layers, producing the positive $\delta_{C_d}$ correction values observed in Table~\ref{tab:l3_anchors_results}. More critically, the RANS solution is steady-state: near the critical slant angle ($\alpha_\mathrm{slant} \approx 28$--$32^\circ$), the actual flow periodically switches between attached and separated states, and the steady RANS converges to an averaged intermediate state that does not correspond to either physical regime. This means RANS DoE data in the critical region is structurally mis-specified, not merely noisy, and the co-Kriging correction GP must learn a large, non-smooth $\delta$ in that zone.
 
 The consequence for surrogate quality is that the correction GP's length scale in the slant direction is shorter near the critical angle, correctly increasing surrogate uncertainty there and widening the $\sigma_\mathrm{HF}$ band. The MF optimum's uncertainty is therefore physically motivated: the correction GP is uncertain precisely in the region where the RANS model is most unreliable.
+
+\paragraph{Scope of the multi-fidelity correction.} It is important to note that the co-Kriging correction $\delta(\mathbf{x})$ spans \emph{mesh fidelity only}: the L3 anchors are solved with the same kOmegaSST steady-RANS closure as the L2 DoE cases. The turbulence-model error — systematic over-prediction of vortex strength in separated flow, and the inability of a steady solver to represent the bistable critical-angle regime — is \emph{common to both fidelity levels} and passes through the correction GP uncorrected. A further fidelity axis, using pimpleFoam URANS or DES at the anchor locations, would capture this component and is the natural next step in the multi-fidelity hierarchy. The present result should therefore be interpreted as the optimum of the \emph{L3 RANS landscape}, not of the true time-averaged flow.
+
+\subsection{Objective Function Weighting and Optimum Migration}
+\label{sec:lambda_sensitivity}
+
+The objective $f_1 = C_d + \tfrac{1}{3}C_l$ assigns equal aerodynamic value to a drag count as to one-third of a downforce count. The choice $\lambda = 1/3$ is conventional for ground-vehicle drag-downforce trade-offs but is ultimately circuit-dependent: a high-downforce circuit increases the marginal lap-time value of $C_l$ (reducing $\lambda$), while a low-drag circuit does the opposite. To quantify how sensitive the optimum location is to this choice, the MF co-Kriging surrogate was re-optimised for six values of $\lambda$ spanning the full practical range. Results are reported in Table~\ref{tab:lambda_sweep} and Figure~\ref{fig:lambda_sweep}.
+
+\begin{table}[h]
+  \centering
+  \caption{MF optimum location as a function of $\lambda$ (HF surrogate mean). All results from the fitted co-Kriging model; no additional CFD runs were performed.}
+  \label{tab:lambda_sweep}
+  \begin{tabular}{lccccc}
+    \toprule
+    $\lambda$ & $\alpha_s^*$ (°) & $\alpha_d^*$ (°) & $\hat{C}_d^*$ & $\hat{C}_l^*$ & $\hat{f}^*$ \\
+    \midrule
+    0 (drag only) & 15.4 &  9.5 & 0.266 & $-$0.006 & 0.266 \\
+    1/6           & 39.0 & 10.5 & 0.288 & $-$0.275 & 0.242 \\
+    1/3 (baseline, verified at L3) & 38.9 & 10.5 & 0.288 & $-$0.275 & 0.196 \\
+    1/2           & 38.8 & 10.5 & 0.288 & $-$0.276 & 0.151 \\
+    2/3           & 38.8 & 10.5 & 0.288 & $-$0.276 & 0.105 \\
+    1             & 38.8 & 10.4 & 0.288 & $-$0.276 & 0.013 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.95\textwidth]{figures/lambda_sweep}
+  \caption{MF surrogate optimum migration with objective weighting $\lambda$. Left: optimal slant angle. Centre: optimal diffuser angle. Right: $C_d^*$ and $C_l^*$ at the optimum. The vertical dashed line marks $\lambda=1/3$ (campaign baseline). For any $\lambda>0$ the optimum geometry is clustered near $(38.8$--$39.0^\circ,\ 10.4$--$10.5^\circ)$; only the pure drag case ($\lambda=0$) relocates the optimum to the low-slant regime. All values from the fitted HF co-Kriging surrogate.}
+  \label{fig:lambda_sweep}
+\end{figure}
+
+A notable finding from the sweep is the robustness of the optimum location: for any $\lambda > 0$ (any positive weighting of downforce), the MF surrogate predicts the same geometric optimum near $(38.8$--$39.0^\circ,\ 10.4$--$10.5^\circ)$. Only the pure drag-minimisation case ($\lambda=0$) relocates the optimum to the low-slant regime ($15.4^\circ$, near-zero $C_l$). This confirms that the $\lambda = 1/3$ result is not sensitive to the exact weighting choice in any practical motorsport context. For the full Pareto-front perspective — trading drag against downforce without a fixed $\lambda$ — see Figure~\ref{fig:pareto_front}, which shows 61 non-dominated designs across the full range of drag--downforce trade-offs available in the 2D design space.
 
 \subsection{Simplified Geometry Relative to Full Race Car}
 \label{sec:ahmed_limits}

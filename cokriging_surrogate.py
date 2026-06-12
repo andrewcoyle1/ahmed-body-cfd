@@ -291,6 +291,85 @@ def optimise_mf(
     return opt
 
 
+# ── 6b. λ-sensitivity sweep ───────────────────────────────────────────────────
+
+def lambda_sweep(
+    gp_cd_lf, gp_cl_lf, scaler_lf,
+    gp_dcd, gp_dcl, scaler_anc,
+    lambdas=(0.0, 1/6, 1/3, 1/2, 2/3, 1.0),
+) -> pd.DataFrame:
+    """Re-optimise f = Cd_HF + λ·Cl_HF for each λ value."""
+    bounds_list = [BOUNDS[f] for f in FEATURES]
+    rows = []
+    for lam in lambdas:
+        def obj(x, lam=lam):
+            X = x.reshape(1, -1)
+            cd_hf, _, cl_hf, _ = predict_hf(
+                X, gp_cd_lf, gp_cl_lf, scaler_lf, gp_dcd, gp_dcl, scaler_anc)
+            return float(cd_hf[0] + lam * cl_hf[0])
+
+        result = differential_evolution(obj, bounds=bounds_list, seed=42,
+                                        maxiter=500, tol=1e-7, popsize=20)
+        x_opt = result.x.reshape(1, -1)
+        cd_hf, _, cl_hf, _ = predict_hf(
+            x_opt, gp_cd_lf, gp_cl_lf, scaler_lf, gp_dcd, gp_dcl, scaler_anc)
+        rows.append({
+            "lambda":          round(float(lam), 6),
+            "slant_angle":     round(float(result.x[0]), 2),
+            "diffuser_angle":  round(float(result.x[1]), 2),
+            "Cd_HF":           round(float(cd_hf[0]), 4),
+            "Cl_HF":           round(float(cl_hf[0]), 4),
+            "f_HF":            round(float(result.fun), 4),
+        })
+        print(f"  λ={lam:.4f}  slant={result.x[0]:.1f}°  diff={result.x[1]:.1f}°  "
+              f"Cd={cd_hf[0]:.4f}  Cl={cl_hf[0]:.4f}  f={result.fun:.4f}")
+
+    df = pd.DataFrame(rows)
+    out = RESULTS_DIR / "lambda_sweep.csv"
+    df.to_csv(out, index=False, float_format="%.6f")
+    print(f"  Saved → {out}")
+    return df
+
+
+def plot_lambda_sweep(df: pd.DataFrame):
+    """Plot optimum location and objective vs λ."""
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+    fig.suptitle("MF Optimum Migration with Objective Weighting $\\lambda$", fontsize=12)
+
+    lam = df["lambda"].values
+    markers = "o"
+
+    axes[0].plot(lam, df["slant_angle"].values, f"{markers}-", color="#1f77b4", ms=7)
+    axes[0].set_xlabel("$\\lambda$", fontsize=11)
+    axes[0].set_ylabel("Optimal $\\alpha_s^*$ (°)", fontsize=11)
+    axes[0].set_title("Slant angle", fontsize=10)
+    axes[0].grid(True, alpha=0.3)
+
+    axes[1].plot(lam, df["diffuser_angle"].values, f"{markers}-", color="#ff7f0e", ms=7)
+    axes[1].set_xlabel("$\\lambda$", fontsize=11)
+    axes[1].set_ylabel("Optimal $\\alpha_d^*$ (°)", fontsize=11)
+    axes[1].set_title("Diffuser angle", fontsize=10)
+    axes[1].grid(True, alpha=0.3)
+
+    axes[2].plot(lam, df["Cd_HF"].values, f"{markers}-", color="#2ca02c", ms=7, label="$C_d^*$")
+    axes[2].plot(lam, df["Cl_HF"].values, f"s-", color="#d62728", ms=7, label="$C_l^*$")
+    axes[2].set_xlabel("$\\lambda$", fontsize=11)
+    axes[2].set_ylabel("Coefficient", fontsize=11)
+    axes[2].set_title("$C_d^*$ and $C_l^*$ at optimum", fontsize=10)
+    axes[2].legend(fontsize=9)
+    axes[2].grid(True, alpha=0.3)
+
+    # Mark λ = 1/3
+    for ax in axes:
+        ax.axvline(1/3, color="gray", lw=1, ls="--", alpha=0.7)
+
+    plt.tight_layout()
+    out = RESULTS_DIR / "lambda_sweep.png"
+    plt.savefig(out, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Saved → {out}")
+
+
 # ── 7. Plots ──────────────────────────────────────────────────────────────────
 
 def plot_validation(df_anchors, cd_loo, cl_loo, cd_std, cl_std):
@@ -546,6 +625,11 @@ def main():
             gp_cd_lf, gp_cl_lf, scaler_lf,
             gp_dcd, gp_dcl, scaler_anc,
             opt_l2, opt_mf)
+
+    # λ-sweep
+    print("\n── λ-sensitivity sweep ───────────────────────────────────────")
+    df_lam = lambda_sweep(gp_cd_lf, gp_cl_lf, scaler_lf, gp_dcd, gp_dcl, scaler_anc)
+    plot_lambda_sweep(df_lam)
 
     # Verification
     if verify:

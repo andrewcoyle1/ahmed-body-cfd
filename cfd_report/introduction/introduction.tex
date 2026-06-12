@@ -38,7 +38,7 @@ The Kennedy \& O'Hagan (2000) co-Kriging model \cite{kennedy2000} decomposes the
     \label{eq:cokriging}
 \end{equation}
 
-where $f_\mathrm{LF}$ is the RANS-trained Gaussian Process (GP) and $\delta(\mathbf{x})$ is an independent GP trained on the fidelity correction $f_\mathrm{HF} - f_\mathrm{LF}$ at the DES evaluation points. This additive formulation allows the correction GP to learn regions where RANS is systematically wrong, without requiring any modification to the underlying RANS or DES workflows. Both GPs use a Mat\'{e}rn-$5/2$ kernel with automatic relevance determination (ARD), enabling the surrogate to identify the relative sensitivity of each design dimension.
+where $f_\mathrm{LF}$ is the RANS-trained Gaussian Process (GP) and $\delta(\mathbf{x})$ is an independent GP trained on the fidelity correction $f_\mathrm{HF} - f_\mathrm{LF}$ at the high-fidelity anchor simulation points. This additive formulation allows the correction GP to learn regions where the low-fidelity model is systematically wrong, without requiring any modification to the underlying RANS workflows at either fidelity level. Both GPs use a Mat\'{e}rn-$5/2$ kernel with automatic relevance determination (ARD), enabling the surrogate to identify the relative sensitivity of each design dimension.
 
 \subsection{Bayesian Optimisation}
 
@@ -49,7 +49,7 @@ Bayesian Optimisation (BO) uses the co-Kriging surrogate's predictive mean and u
     \label{eq:ei}
 \end{equation}
 
-where $f^*$ is the current best observed value of the aerodynamic efficiency objective. The EI quantifies the expected improvement over the current optimum, balancing exploration (high surrogate uncertainty) against exploitation (low surrogate mean). As the surrogate is refined with each DES evaluation, EI should decay monotonically; convergence is declared when EI falls below a threshold.
+where $f^*$ is the current best observed value of the aerodynamic efficiency objective. The EI quantifies the expected improvement over the current optimum, balancing exploration (high surrogate uncertainty) against exploitation (low surrogate mean). As the surrogate is refined with each new evaluation, EI should decay monotonically; convergence is declared when EI falls below a threshold.
 
 \subsection{Objective Function}
 
